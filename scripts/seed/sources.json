@@ -1,0 +1,13 @@
+[
+  { "platform": "youtube", "name": "Two Minute Papers", "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg", "topics": ["ai"], "match_keywords": true },
+  { "platform": "article", "name": "Hugging Face Blog", "url": "https://huggingface.co/blog/feed.xml", "topics": ["ai"], "match_keywords": true },
+  { "platform": "article", "name": "Simon Willison", "url": "https://simonwillison.net/atom/everything/", "topics": ["ai"], "match_keywords": true },
+  { "platform": "article", "name": "Google AI Blog", "url": "https://blog.google/technology/ai/rss/", "topics": ["ai"], "match_keywords": true },
+  { "platform": "article", "name": "TechCrunch AI", "url": "https://techcrunch.com/category/artificial-intelligence/feed/", "topics": ["ai"], "match_keywords": true },
+  { "platform": "article", "name": "Nielsen Norman Group", "url": "https://www.nngroup.com/feed/rss/", "topics": [], "match_keywords": true },
+  { "platform": "podcast", "name": "Latent Space", "url": "https://www.latent.space/feed", "topics": ["ai"], "match_keywords": true },
+  { "platform": "github", "name": "ComfyUI (release)", "url": "https://github.com/comfyanonymous/ComfyUI/releases.atom", "topics": ["ai-generativa", "ai-immagini"], "match_keywords": false },
+  { "platform": "github", "name": "Stable Diffusion WebUI (release)", "url": "https://github.com/AUTOMATIC1111/stable-diffusion-webui/releases.atom", "topics": ["ai-generativa", "ai-immagini"], "match_keywords": false },
+  { "platform": "hn", "name": "Hacker News: generative AI", "url": "https://hn.algolia.com/api/v1/search_by_date?tags=story&query=generative%20AI&numericFilters=points%3E20&hitsPerPage=30", "topics": ["ai", "ai-generativa"], "match_keywords": true },
+  { "platform": "hn", "name": "Hacker News: AI video e immagini", "url": "https://hn.algolia.com/api/v1/search_by_date?tags=story&query=text-to-video&numericFilters=points%3E20&hitsPerPage=30", "topics": ["ai", "ai-generativa"], "match_keywords": true }
+]

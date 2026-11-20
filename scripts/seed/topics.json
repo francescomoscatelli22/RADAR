@@ -1,0 +1,14 @@
+[
+  { "slug": "ai", "label": "AI", "parent_slug": null, "sort_order": 1,
+    "keywords": ["AI", "artificial intelligence", "intelligenza artificiale", "LLM", "machine learning", "OpenAI", "Anthropic", "Claude", "Gemini", "agent", "agents", "agentic"] },
+  { "slug": "ai-generativa", "label": "AI generativa", "parent_slug": "ai", "sort_order": 2,
+    "keywords": ["generative AI", "generative", "AI generativa", "diffusion", "text-to-image", "text-to-video", "image generation", "video generation", "Midjourney", "Stable Diffusion", "Flux", "ComfyUI", "Sora", "Veo", "Runway", "Firefly", "DALL-E", "Nano Banana"] },
+  { "slug": "ai-immagini", "label": "Immagini", "parent_slug": "ai-generativa", "sort_order": 3,
+    "keywords": ["text-to-image", "image generation", "Midjourney", "Stable Diffusion", "Flux", "ComfyUI", "DALL-E", "Firefly", "Nano Banana", "inpainting", "LoRA"] },
+  { "slug": "ai-video", "label": "Video", "parent_slug": "ai-generativa", "sort_order": 4,
+    "keywords": ["text-to-video", "video generation", "AI video", "Sora", "Veo", "Runway", "Kling", "Pika", "Luma", "Seedance"] },
+  { "slug": "ai-3d", "label": "3D", "parent_slug": "ai-generativa", "sort_order": 5,
+    "keywords": ["3D generation", "text-to-3D", "image-to-3D", "NeRF", "Gaussian splatting", "Meshy", "Tripo", "Blender"] },
+  { "slug": "ai-ui-ux", "label": "UI/UX", "parent_slug": "ai", "sort_order": 6,
+    "keywords": ["UX", "UI design", "product design", "design system", "Figma", "prototyping", "interface design"] }
+]
