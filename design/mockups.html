@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar: due direzioni di design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Instrument+Sans:wght@400;500;600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- TOKEN: direzione A "Rivista" ---------- */
+[data-dir="a"][data-mode="light"]{
+  --bg:#F6F1E7; --surface:#F6F1E7; --ink:#1B1A17; --ink-2:#5E5A50; --line:#DDD5C3; --accent:#C8391E; --chip:#EAE2D0; --on-accent:#fff;
+}
+[data-dir="a"][data-mode="dark"]{
+  --bg:#17150F; --surface:#17150F; --ink:#EDE6D6; --ink-2:#A39C89; --line:#2F2B21; --accent:#F0674A; --chip:#262218; --on-accent:#17150F;
+}
+[data-dir="a"]{
+  --font-ui:'Instrument Sans',system-ui,sans-serif; --font-title:'Fraunces',Georgia,serif; --font-read:'Fraunces',Georgia,serif; --font-mono:'Instrument Sans',system-ui,sans-serif;
+  --radius:0px; --card-pad:18px 0; --title-size:21px; --title-weight:600; --read-size:19px; --read-lh:1.65;
+}
+/* ---------- TOKEN: direzione B "Strumento radar" ---------- */
+[data-dir="b"][data-mode="dark"]{
+  --bg:#0B0E13; --surface:#141922; --ink:#E8ECF3; --ink-2:#8A94A6; --line:#222A37; --accent:#7C5CFF; --chip:#1B2230; --on-accent:#fff;
+}
+[data-dir="b"][data-mode="light"]{
+  --bg:#EEF1F6; --surface:#FFFFFF; --ink:#0F1520; --ink-2:#5B6577; --line:#DAE0EA; --accent:#5B3DF0; --chip:#E3E8F1; --on-accent:#fff;
+}
+[data-dir="b"]{
+  --font-ui:'Geist',system-ui,sans-serif; --font-title:'Geist',system-ui,sans-serif; --font-read:'Geist',system-ui,sans-serif; --font-mono:'Geist Mono',ui-monospace,monospace;
+  --radius:16px; --card-pad:14px 16px; --title-size:17px; --title-weight:600; --read-size:17px; --read-lh:1.6;
+}
+
+*{box-sizing:border-box;margin:0}
+body{font-family:system-ui,sans-serif;background:#d9d6cf;color:#222;min-height:100vh;padding:20px 12px 40px;display:flex;flex-direction:column;align-items:center;gap:16px}
+body.page-dark{background:#222}
+.controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;font:500 13px system-ui}
+.group{display:flex;background:#fff;border-radius:999px;padding:3px;box-shadow:0 1px 3px #0003}
+.group button{border:0;background:none;padding:7px 14px;border-radius:999px;font:inherit;cursor:pointer;color:#333}
+.group button.on{background:#222;color:#fff}
+.note{max-width:420px;text-align:center;font:13px/1.4 system-ui;color:#555}
+body.page-dark .note{color:#bbb}
+
+.phone{width:390px;max-width:100%;height:800px;border-radius:44px;background:var(--bg);color:var(--ink);font-family:var(--font-ui);overflow:hidden;position:relative;box-shadow:0 0 0 10px #111,0 20px 50px #0006;display:flex;flex-direction:column}
+.status{height:46px;flex:none;display:flex;justify-content:space-between;align-items:flex-end;padding:0 28px 6px;font:600 15px var(--font-ui)}
+.screen{flex:1;overflow-y:auto;padding:0 20px 16px;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.tabbar{flex:none;display:flex;justify-content:space-around;padding:10px 8px 26px;border-top:1px solid var(--line);background:var(--bg)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font:500 11px var(--font-ui);color:var(--ink-2);cursor:pointer;background:none;border:0;min-width:64px}
+.tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--ink)}
+.tab.on svg{stroke:var(--accent)}
+
+/* intestazione */
+.head{padding:8px 0 10px}
+.date{font:500 12px var(--font-ui);color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase}
+h1{font-family:var(--font-title);font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:2px}
+[data-dir="b"] h1{font-size:28px;display:flex;align-items:center;gap:10px}
+.pulse{display:none;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:p 2.2s infinite}
+[data-dir="b"] .pulse{display:inline-block}
+@keyframes p{70%{box-shadow:0 0 0 10px #0000}100%{box-shadow:0 0 0 0 #0000}}
+
+/* filtri */
+.filters{display:flex;gap:6px;overflow-x:auto;padding:6px 0 12px;scrollbar-width:none;margin:0 -20px;padding-left:20px;padding-right:20px}
+.filters::-webkit-scrollbar{display:none}
+.f{flex:none;border:0;background:none;font:500 14px var(--font-ui);color:var(--ink-2);padding:6px 2px;margin-right:12px;cursor:pointer;border-bottom:2px solid transparent}
+.f.on{color:var(--ink);border-bottom-color:var(--accent)}
+[data-dir="b"] .f{background:var(--chip);border-radius:999px;padding:7px 13px;margin:0;border:0;font-size:13px}
+[data-dir="b"] .f.on{background:var(--accent);color:var(--on-accent)}
+
+/* card articolo */
+.card{display:block;padding:var(--card-pad);border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+[data-dir="a"] .card:last-child{border-bottom:0}
+[data-dir="b"] .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:10px;padding-left:20px;overflow:hidden}
+[data-dir="b"] .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tc,var(--accent))}
+.meta{display:flex;align-items:center;gap:6px;font:500 11.5px var(--font-ui);color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em}
+[data-dir="b"] .meta{font-family:var(--font-mono);font-size:11px;letter-spacing:.02em}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+.card.read .dot{background:transparent;border:1px solid var(--line)}
+.card.read .t{color:var(--ink-2);font-weight:500}
+.t{font-family:var(--font-title);font-size:var(--title-size);font-weight:var(--title-weight);line-height:1.25;margin:6px 0 5px;letter-spacing:-.01em}
+.x{font:400 14px/1.45 var(--font-ui);color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tag{color:var(--tc,var(--accent))}
+
+/* lettura */
+.back{display:flex;align-items:center;gap:6px;background:none;border:0;color:var(--ink);font:500 15px var(--font-ui);padding:8px 0 14px;cursor:pointer}
+.back svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.art h2{font-family:var(--font-title);font-weight:700;font-size:28px;line-height:1.15;letter-spacing:-.02em;margin:8px 0 12px}
+[data-dir="b"] .art h2{font-size:25px}
+.byline{font:400 13px var(--font-ui);color:var(--ink-2);padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.body p{font-family:var(--font-read);font-size:var(--read-size);line-height:var(--read-lh);margin-bottom:1.1em;font-weight:400}
+.body blockquote{border-left:3px solid var(--accent);padding-left:14px;margin:0 0 1.2em;color:var(--ink-2);font-family:var(--font-read);font-size:calc(var(--read-size) - 1px);line-height:1.5}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:calc(var(--radius) * .8);border:1px solid var(--line);background:none;color:var(--ink);font:600 15px var(--font-ui);cursor:pointer;margin-top:8px}
+[data-dir="a"] .btn{border-radius:2px}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+
+/* impostazioni */
+.sec{font:600 12px var(--font-ui);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);margin:20px 0 8px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);font:500 15px var(--font-ui)}
+[data-dir="b"] .row{background:var(--surface);padding:13px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.sub{font:400 12.5px var(--font-ui);color:var(--ink-2);margin-top:2px}
+.sw{width:46px;height:28px;border-radius:99px;background:var(--chip);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0004}
+.sw.on{background:var(--accent)}
+.sw.on::after{left:21px}
+.sel{font:500 14px var(--font-ui);color:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div class="group" id="g-dir"><button data-v="a" class="on">A · Rivista</button><button data-v="b">B · Strumento radar</button></div>
+  <div class="group" id="g-mode"><button data-v="light" class="on">Chiaro</button><button data-v="dark">Scuro</button></div>
+  <div class="group" id="g-screen"><button data-v="feed" class="on">Feed</button><button data-v="read">Lettura</button><button data-v="set">Impostazioni</button></div>
+</div>
+<p class="note" id="note"></p>
+
+<div class="phone" id="phone" data-dir="a" data-mode="light">
+  <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
+  <div class="screen" id="screen"></div>
+  <div class="tabbar">
+    <button class="tab on" data-go="feed"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Feed</button>
+    <button class="tab"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg>Salvati</button>
+    <button class="tab"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Cerca</button>
+    <button class="tab" data-go="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Impostazioni</button>
+  </div>
+</div>
+
+<script>
+const topics = {ai:'#7C5CFF', design:'#FF6B9A', video:'#F5A524', innov:'#22C55E', corso:'#14B8A6'};
+const items = [
+ {t:'Claude Code 2.4: sub-agenti paralleli e nuovi hook', x:'La release introduce la gestione di più agenti in parallelo e nuovi punti di aggancio per automatizzare i controlli prima del commit.', s:'Claude Code', c:'AI', k:'ai', w:'12 min', r:false},
+ {t:'Come progettare un servizio che le persone usano davvero', x:'Cinque domande da farsi prima di disegnare una sola schermata, con esempi dal settore sanitario e dai trasporti.', s:'Nielsen Norman Group', c:'UX e Service Design', k:'corso', w:'1 h', r:false},
+ {t:'Il montaggio nel 2026: cosa è cambiato davvero', x:'Dai proxy automatici al color grading assistito: una rassegna degli strumenti che fanno risparmiare ore ai creator indipendenti.', s:'No Film School', c:'Video', k:'video', w:'3 h', r:true},
+ {t:'Etica dell\'IA: perché le linee guida da sole non bastano', x:'Un confronto tra i principi dell\'AI Act e le pratiche delle aziende, con tre casi concreti di valutazione d\'impatto.', s:'Agenda Digitale', c:'Etica e IA', k:'corso', w:'5 h', r:true},
+ {t:'Startup italiane: i round chiusi questa settimana', x:'Sei operazioni sopra il milione di euro, dal climate tech all\'industria creativa.', s:'TechCrunch', c:'Startup', k:'innov', w:'ieri', r:true},
+];
+const state = {dir:'a', mode:'light', screen:'feed', filter:0};
+const $ = s => document.querySelector(s);
+
+function feed(){
+  const dirB = state.dir==='b';
+  const filters = ['Tutto','AI','Design','Video','Startup','Corsi'];
+  return `<div class="head"><div class="date">Venerdì 20 novembre</div><h1>${dirB?'<span class="pulse"></span>':''}Radar</h1></div>
+  <div class="filters">${filters.map((f,i)=>`<button class="f ${i===state.filter?'on':''}" data-f="${i}">${f}</button>`).join('')}</div>
+  ${items.map((a,i)=>`<a class="card ${a.r?'read':''}" data-open="${i}" style="--tc:${topics[a.k]}">
+    <div class="meta"><span class="dot"></span><span>${a.s}</span><span>·</span><span class="tag">${a.c}</span><span>·</span><span>${a.w}</span></div>
+    <div class="t">${a.t}</div><div class="x">${a.x}</div></a>`).join('')}`;
+}
+function read(){
+  return `<button class="back" data-go="feed"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Feed</button>
+  <div class="art">
+   <div class="meta"><span class="tag" style="--tc:${topics.ai}">AI e strumenti agentici</span><span>·</span><span>Claude Code</span></div>
+   <h2>Claude Code 2.4: sub-agenti paralleli e nuovi hook</h2>
+   <div class="byline">Pubblicato 20 nov 2026 · 4 min di lettura</div>
+   <div class="body">
+    <p>La nuova versione cambia il modo in cui si divide il lavoro tra più agenti: ognuno può occuparsi di una parte del progetto mentre l'agente principale coordina il risultato.</p>
+    <blockquote>Gli hook permettono di eseguire un controllo automatico prima o dopo un'azione, ad esempio prima di ogni commit.</blockquote>
+    <p>Per chi lavora da poco con gli strumenti agentici, la novità più utile è la possibilità di vedere in un elenco cosa sta facendo ogni agente e di fermarlo con un tocco.</p>
+    <p>Restano alcuni limiti: i sub-agenti non condividono la memoria della conversazione e ogni delega consuma crediti a parte.</p>
+   </div>
+   <button class="btn primary">Apri originale ↗</button>
+   <button class="btn">Salva per dopo</button>
+  </div>`;
+}
+function settings(){
+  return `<div class="head"><h1>Impostazioni</h1></div>
+  <div class="sec">Notifiche</div>
+  <button class="btn primary" style="margin:0 0 8px">Attiva notifiche</button>
+  <button class="btn" style="margin:0 0 4px">Invia notifica di prova</button>
+  <div class="sec">Argomenti</div>
+  <div class="row"><div>AI e strumenti agentici<div class="sub">Subito</div></div><div class="sw on"></div></div>
+  <div class="row"><div>Design<div class="sub">Riepilogo giornaliero</div></div><div class="sw on"></div></div>
+  <div class="row"><div>Etica sociale e IA<div class="sub">Spento</div></div><div class="sw"></div></div>
+  <div class="sec">Orari</div>
+  <div class="row"><div>Silenzio<div class="sub">Nessuna notifica di notte</div></div><div class="sel">22:00 → 07:30</div></div>
+  <div class="row"><div>Riepilogo giornaliero</div><div class="sel">08:00</div></div>`;
+}
+function render(){
+  $('#phone').dataset.dir = state.dir; $('#phone').dataset.mode = state.mode;
+  document.body.classList.toggle('page-dark', state.mode==='dark');
+  $('#screen').innerHTML = state.screen==='feed'?feed():state.screen==='read'?read():settings();
+  $('#screen').scrollTop = 0;
+  document.querySelectorAll('.tab[data-go]').forEach(t=>t.classList.toggle('on', t.dataset.go===(state.screen==='read'?'feed':state.screen)));
+  document.querySelectorAll('#g-screen button').forEach(b=>b.classList.toggle('on', b.dataset.v===state.screen));
+  $('#note').textContent = state.dir==='a'
+    ? 'A · Rivista: carta calda, serif Fraunces, un solo accento vermiglio. Righe tipografiche con filetti. Pensata per la lettura lunga.'
+    : 'B · Strumento radar: superfici fredde, Geist + mono, un colore per argomento, schede arrotondate. Più densa e da "cruscotto".';
+}
+function group(id, key){ document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{
+  state[key]=b.dataset.v; document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.toggle('on',x===b)); render(); }); }
+group('g-dir','dir'); group('g-mode','mode'); group('g-screen','screen');
+document.addEventListener('click', e=>{
+  const go = e.target.closest('[data-go]'); if(go){ state.screen = go.dataset.go; render(); return; }
+  if(e.target.closest('[data-open]')){ state.screen='read'; render(); return; }
+  const f = e.target.closest('[data-f]'); if(f){ state.filter=+f.dataset.f; render(); }
+});
+render();
+</script>
+</body>
+</html>
