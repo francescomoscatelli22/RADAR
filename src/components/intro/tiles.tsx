@@ -2,28 +2,18 @@
 
 import { motion, useTransform } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
-import {
-  DISPLAY,
-  MONO,
-  RADAR_CENTER,
-  backOut,
-  clamp01,
-  easeInOut,
-  easeOut,
-  type Time,
-} from "./timeline";
+import { ACCENT_SERIF, DISPLAY, MONO, backOut, clamp01, easeOut, type Time } from "./timeline";
 
 /*
   I 6 formati del feed come blocchi Zine (bordo spesso, ombra dura), ognuno con una micro-animazione:
   video, post, articolo, thread, release, podcast.
-  Escono dal radar uno dopo l'altro (entrano con un rimbalzo) e alla fine vengono risucchiati di nuovo dentro.
+  Arrivano uno dopo l'altro dai lati, come adesivi sbattuti sul poster (entrano con un rimbalzo), e restano lì.
 */
 
 const W = 166;
-const H = 86;
+const H = 92;
 const INK = "var(--color-card-ink)";
 const READING = "var(--font-newsreader), Georgia, serif";
-const ACCENT_SERIF = "var(--font-instrument), Georgia, serif";
 
 /** Testo che si scrive da solo, lettera per lettera (con cursore finché non ha finito). */
 function useTyped(time: Time, text: string, start: number, dur: number) {
@@ -271,39 +261,31 @@ type Spec = {
 };
 
 const SPECS: Spec[] = [
-  { id: "video", x: 24, y: 452, rot: -1.5, bg: "var(--color-card-video)", label: "VIDEO", meta: "YOUTUBE", Body: VideoBody },
-  { id: "post", x: 200, y: 458, rot: 1.2, bg: "var(--color-card-post)", label: "POST", meta: "LINKEDIN", Body: PostBody },
-  { id: "article", x: 24, y: 548, rot: 1, bg: "var(--color-card-article)", label: "ARTICOLO", meta: "3 H", Body: ArticleBody },
-  { id: "thread", x: 200, y: 554, rot: -1.2, bg: "var(--color-card-thread)", label: "THREAD", meta: "HN", Body: ThreadBody },
-  { id: "release", x: 24, y: 644, rot: -1, bg: "var(--color-card-code)", label: "RELEASE", meta: "GITHUB", Body: ReleaseBody },
-  { id: "podcast", x: 200, y: 650, rot: 1.5, bg: "var(--color-card-audio)", label: "PODCAST", meta: "42 MIN", Body: PodcastBody },
+  { id: "video", x: 24, y: 396, rot: -1.5, bg: "var(--color-card-video)", label: "VIDEO", meta: "YOUTUBE", Body: VideoBody },
+  { id: "post", x: 200, y: 402, rot: 1.2, bg: "var(--color-card-post)", label: "POST", meta: "LINKEDIN", Body: PostBody },
+  { id: "article", x: 24, y: 498, rot: 1, bg: "var(--color-cream)", label: "ARTICOLO", meta: "3 H", Body: ArticleBody },
+  { id: "thread", x: 200, y: 504, rot: -1.2, bg: "var(--color-card-thread)", label: "THREAD", meta: "HN", Body: ThreadBody },
+  { id: "release", x: 24, y: 600, rot: -1, bg: "var(--color-card-code)", label: "RELEASE", meta: "GITHUB", Body: ReleaseBody },
+  { id: "podcast", x: 200, y: 606, rot: 1.5, bg: "var(--color-card-audio)", label: "PODCAST", meta: "42 MIN", Body: PodcastBody },
 ];
 
-const FIRST_AT = 1.0; // il primo blocco esce dal radar a 1 s
+const FIRST_AT = 1.0; // il primo blocco arriva a 1 s
 const GAP = 0.32; // e gli altri a distanza di 0,32 s
-const EXIT_AT = 3.8; // verso 3,8 s tornano nel radar
-const EXIT_GAP = 0.06;
 
 function Tile({ time, spec, index }: { time: Time; spec: Spec; index: number }) {
   const { x, y, rot, bg, label, meta, Body } = spec;
   const at = FIRST_AT + index * GAP;
-  const exitAt = EXIT_AT + index * EXIT_GAP;
-  // distanza dal centro del radar: da lì esce e lì ritorna
-  const dx = RADAR_CENTER.x - (x + W / 2);
-  const dy = RADAR_CENTER.y - (y + H / 2);
+  // quelli di sinistra arrivano da sinistra, quelli di destra da destra
+  const side = x < 100 ? -1 : 1;
   const dir = rot < 0 ? -1 : 1;
 
   const enter = (t: number) => backOut(clamp01((t - at) / 0.6));
-  const leave = (t: number) => easeInOut(clamp01((t - exitAt) / 0.45));
 
-  const tx = useTransform(time, (t) => dx * (1 - enter(t)) + dx * leave(t));
-  const ty = useTransform(time, (t) => dy * (1 - enter(t)) + dy * leave(t));
-  const scale = useTransform(time, (t) => (0.15 + 0.85 * enter(t)) * (1 - 0.85 * leave(t)));
-  const rotate = useTransform(time, (t) => rot + dir * 18 * (1 - enter(t)) + dir * 25 * leave(t));
-  const opacity = useTransform(
-    time,
-    (t) => clamp01((t - at) / 0.12) * (1 - clamp01((leave(t) - 0.6) / 0.4)),
-  );
+  const tx = useTransform(time, (t) => side * 420 * (1 - enter(t)));
+  const ty = useTransform(time, (t) => 40 * (1 - enter(t)));
+  const scale = useTransform(time, (t) => 0.7 + 0.3 * enter(t));
+  const rotate = useTransform(time, (t) => rot + dir * 22 * (1 - enter(t)));
+  const opacity = useTransform(time, (t) => clamp01((t - at) / 0.1));
 
   return (
     <motion.div
@@ -319,8 +301,8 @@ function Tile({ time, spec, index }: { time: Time; spec: Spec; index: number }) 
         gap: 5,
         padding: "6px 7px",
         overflow: "hidden",
-        border: "3px solid var(--color-cream)",
-        boxShadow: "4px 4px 0 var(--color-cream)",
+        border: `3px solid ${INK}`,
+        boxShadow: `4px 4px 0 ${INK}`,
         background: bg,
         color: INK,
         x: tx,

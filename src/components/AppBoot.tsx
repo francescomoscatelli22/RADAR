@@ -6,12 +6,12 @@ import Intro from "./intro/Intro";
 import Splash, { type Stage } from "./splash/Splash";
 
 type Phase = Stage | "gone";
-// caricamento animato: "loading" (5 s con la barra) → "revealing" (il foro scopre la schermata iniziale) → "done"
+// caricamento animato: "loading" (5 s con la barra) → "revealing" (le strisce scoprono la schermata iniziale) → "done"
 type Boot = "loading" | "revealing" | "done";
 
 /**
  * Apertura di Radar. Si vede solo aprendo l'app dalla home ("/").
- *  0. caricamento: intro animata con la barra da 5 secondi, poi un foro circolare scopre la schermata iniziale
+ *  0. caricamento: poster giallo animato con la barra da 5 secondi, poi lo strappo a strisce scopre la schermata iniziale
  *  1. intro: animazione radar in loop, senza fine, finché l'utente non tocca lo schermo
  *  2. menu: compaiono i tre pulsanti (Accedi, Registrati, Continua con Google)
  *  3. leaving: scelta una pagina, il foro circolare si apre e la scopre

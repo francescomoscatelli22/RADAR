@@ -8,16 +8,18 @@ import type { MotionValue } from "motion/react";
 
 export type Time = MotionValue<number>;
 
-// La barra di caricamento dura ESATTAMENTE 5 secondi; poi il foro circolare si apre sulla schermata iniziale.
+// La barra di caricamento dura ESATTAMENTE 5 secondi; poi tre strisce colorate "strappano" via il poster.
 export const BAR_SECONDS = 5;
-export const REVEAL_SECONDS = 0.75;
-export const TOTAL_SECONDS = BAR_SECONDS + REVEAL_SECONDS;
+export const STRIPES = 3;
+export const STRIPE_SECONDS = 0.35; // tempo di una striscia per attraversare lo schermo
+export const STRIPE_STAGGER = 0.07; // ritardo tra una striscia e la successiva
+export const REVEAL_AT = 5.4; // tutto è coperto: il poster sparisce e lo Splash viene montato sotto
+export const PEEL_AT = 5.5; // le strisce cominciano a scoprire lo Splash
+export const TOTAL_SECONDS = PEEL_AT + (STRIPES - 1) * STRIPE_STAGGER + STRIPE_SECONDS;
 
-// Artboard 390 x 844, come il frame Figma e la schermata iniziale (così il radar cade nello stesso punto)
+// Artboard 390 x 844, come il frame Figma e la schermata iniziale
 export const ART_W = 390;
 export const ART_H = 844;
-export const RADAR_CENTER = { x: 195, y: 306 };
-export const RADAR_DY = 116; // il centro del radar sta 116 unità sopra il centro dello schermo
 
 export const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 export const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
@@ -36,3 +38,5 @@ export const backOut: Ease = (p) => {
 // font (arrivano da next/font in layout.tsx)
 export const MONO = "var(--font-martian), ui-monospace, monospace";
 export const DISPLAY = "var(--font-bricolage), system-ui, sans-serif";
+export const ACCENT_SERIF = "var(--font-instrument), Georgia, serif";
+export const MARKER = "var(--font-permanent), cursive";

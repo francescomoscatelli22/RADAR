@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { animate, motion, useMotionValue, useTransform } from "motion/react";
-import { ARM_ANGLE, passDelay } from "../splash/geometry";
 import Tiles from "./tiles";
-import CodeRain from "../splash/CodeRain";
 import {
+  ACCENT_SERIF,
   ART_H,
   ART_W,
   BAR_SECONDS,
   DISPLAY,
+  MARKER,
   MONO,
-  RADAR_CENTER,
-  RADAR_DY,
+  PEEL_AT,
+  REVEAL_AT,
+  STRIPES,
+  STRIPE_SECONDS,
+  STRIPE_STAGGER,
   TOTAL_SECONDS,
   backOut,
   clamp01,
@@ -22,312 +25,246 @@ import {
 } from "./timeline";
 
 /*
-  Intro animata di Radar: dura 5 secondi (la barra di caricamento), poi un foro circolare
-  si apre e scopre la schermata iniziale (Splash) già pronta sotto.
+  Intro animata di Radar: un POSTER GIALLO da 5 secondi (la barra di caricamento), poi tre strisce
+  colorate lo "strappano" via e scoprono la schermata iniziale (Splash, scura, con il radar).
+  Apposta è l'opposto dello Splash: fondo giallo pieno, niente radar, scritte giganti.
 
   Cosa si vede (il tempo è quello dell'orologio unico `time`):
-    0,0 – 1,0 s  il radar si disegna, il contatore "segnali in arrivo" parte
-    1,0 – 3,5 s  i 6 formati del feed escono dal radar, ognuno con la sua micro-animazione
-    3,8 – 4,3 s  i blocchi tornano nel radar, il contatore esce
-    4,1 – 5,0 s  compare il titolo RADAR (stesso punto e stile della schermata iniziale)
-    5,0 – 5,75 s foro circolare → schermata iniziale
+    0,2 – 1,0 s  le parole "L'AI / CHE / CONTA." salgono una alla volta, parte il contatore
+    1,0 – 3,2 s  i 6 formati del feed arrivano dai lati come adesivi, ognuno con la sua micro-animazione
+    4,3 s        adesivo "SI PARTE!"
+    5,0 – 6,0 s  strappo a strisce → schermata iniziale
 
   Il contatore e la barra sono grafica: non misurano un vero caricamento (per ora non c'è niente da caricare).
 */
 
-const C = 150; // centro del radar (viewBox 300)
-const K = 0.9; // 270 px di radar / 300 unità del viewBox
+// temi del nastro (decorativi: l'intro non dipende dai dati dello Splash)
+const TOPICS = [
+  "AI generativa",
+  "Immagini",
+  "Video",
+  "3D e scene",
+  "UI / UX",
+  "Agenti",
+  "Modelli linguistici",
+  "Strumenti",
+  "Open source",
+  "Prompt design",
+  "Audio e voce",
+  "Codice",
+];
 
-const CREAM = "var(--color-cream)";
+const INK = "var(--color-card-ink)";
 const YELLOW = "var(--color-card-article)";
+const CREAM = "var(--color-cream)";
 const ACCENT = "var(--color-accent)";
 
-// ---------- radar: stessa geometria della schermata iniziale ----------
-const BLIPS = [
-  { r: 67, a0: -141, period: 9, dir: 1, ping: true, pingDur: 2.4 },
-  { r: 58, a0: 31, period: 6.5, dir: -1, ping: true, pingDur: 2 },
-  { r: 92, a0: 90, period: 12, dir: 1, ping: false, pingDur: 0 },
-  { r: 114, a0: -22, period: 16, dir: -1, ping: true, pingDur: 2.8 },
-].map((b) => {
-  const rad = (b.a0 * Math.PI) / 180;
-  return { ...b, delay: passDelay(b.r * Math.cos(rad), b.r * Math.sin(rad)) };
-});
+type Geometry = RefObject<{ w: number; h: number }>;
 
-const TRAIL = [0.22, 0.16, 0.1, 0.05].map((opacity, k) => {
-  const R = 138;
-  const point = (deg: number) => {
-    const rad = (deg * Math.PI) / 180;
-    return `${(C + R * Math.cos(rad)).toFixed(1)} ${(C + R * Math.sin(rad)).toFixed(1)}`;
-  };
-  const from = ARM_ANGLE - 9 * (k + 1);
-  const to = ARM_ANGLE - 9 * k;
-  return { opacity, d: `M${C} ${C} L${point(from)} A${R} ${R} 0 0 1 ${point(to)} Z` };
-});
-
-function Ring({ time, r, i }: { time: Time; r: number; i: number }) {
-  const pathLength = useTransform(time, (t) => easeOut(clamp01((t - i * 0.12) / 0.55)));
+// ---------- le tre parole giganti ----------
+function Word({ time, at, instant, children }: { time: Time; at: number; instant: boolean; children: ReactNode }) {
+  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - at) / 0.55)));
+  const y = useTransform(time, (t) => `${(1 - p(t)) * 118}%`);
+  const rotate = useTransform(time, (t) => (1 - p(t)) * 7);
   return (
-    <g transform={`rotate(-90 ${C} ${C})`}>
-      <motion.circle cx={C} cy={C} r={r} fill="none" stroke={CREAM} strokeWidth={3} style={{ pathLength }} />
-    </g>
+    <div style={{ overflow: "hidden", padding: "2px 0" }}>
+      <motion.div style={{ y, rotate, transformOrigin: "0 100%" }}>{children}</motion.div>
+    </div>
   );
 }
 
-function Blip({ time, b }: { time: Time; b: (typeof BLIPS)[number] }) {
-  const size = 16 * K;
-  const pos = (t: number) => {
-    const a = ((b.a0 + (b.dir * 360 * t) / b.period) * Math.PI) / 180;
-    return { x: (C + b.r * Math.cos(a)) * K, y: (C + b.r * Math.sin(a)) * K };
-  };
-  const x = useTransform(time, (t) => pos(t).x - size / 2);
-  const y = useTransform(time, (t) => pos(t).y - size / 2);
-  const scale = useTransform(time, (t) => backOut(clamp01((t - b.delay) / 0.45)));
-  const phase = (t: number) => (t < b.delay ? 1 : ((t - b.delay) % b.pingDur) / b.pingDur);
-  const pingSize = 38 * K;
-  const px = useTransform(time, (t) => pos(t).x - pingSize / 2);
-  const py = useTransform(time, (t) => pos(t).y - pingSize / 2);
-  const pingScale = useTransform(time, (t) => 1 + 1.6 * easeOut(phase(t)));
-  const pingOpacity = useTransform(time, (t) => 0.9 * (1 - phase(t)));
+function Headline({ time, instant }: { time: Time; instant: boolean }) {
+  const blockRotate = useTransform(time, (t) => -1.5 + (instant ? 0 : Math.sin(t * 2.4) * 0.6));
   return (
-    <>
-      {b.ping && (
-        <motion.div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: pingSize,
-            height: pingSize,
-            boxSizing: "border-box",
-            border: `2.25px solid ${ACCENT}`,
-            borderRadius: "50%",
-            x: px,
-            y: py,
-            scale: pingScale,
-            opacity: pingOpacity,
-          }}
-        />
-      )}
-      <motion.div
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          width: size,
-          height: size,
-          boxSizing: "border-box",
-          border: `2.25px solid ${CREAM}`,
-          borderRadius: "50%",
-          background: ACCENT,
-          x,
-          y,
-          scale,
-          opacity: scale,
-        }}
-      />
-    </>
-  );
-}
-
-function Radar({ time }: { time: Time }) {
-  const discOpacity = useTransform(time, (t) => clamp01((t - 0.15) / 0.4));
-  const sweepRotate = useTransform(time, (t) => Math.max(0, t - 0.3) * (360 / 1.6));
-  const sweepOpacity = useTransform(time, (t) => clamp01((t - 0.2) / 0.3));
-  const coreScale = useTransform(time, (t) => backOut(clamp01((t - 0.3) / 0.45)) * (1 + 0.22 * Math.max(0, Math.sin((t - 0.9) * 3.9))));
-  // quando i blocchi rientrano il radar "incassa" con un piccolo colpo
-  const bump = useTransform(time, (t) => 1 + 0.05 * Math.sin(clamp01((t - 4.25) / 0.35) * Math.PI));
-  const box = { position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" } as const;
-  const coreSize = 18 * K;
-
-  return (
-    <motion.div
+    <div
       style={{
         position: "absolute",
-        left: RADAR_CENTER.x - 135,
-        top: RADAR_CENTER.y - 135,
-        width: 270,
-        height: 270,
-        scale: bump,
+        left: 24,
+        top: 76,
+        fontFamily: DISPLAY,
+        fontWeight: 800,
+        fontSize: 88,
+        lineHeight: 0.9,
+        letterSpacing: "-0.055em",
+        color: INK,
       }}
     >
-      <svg viewBox="0 0 300 300" style={box}>
-        <motion.g style={{ opacity: discOpacity }}>
-          <circle cx={C + 4} cy={C + 4} r={140} fill={CREAM} />
-          <circle cx={C} cy={C} r={138.5} fill="var(--color-surface)" />
-          <circle cx={C} cy={C} r={46.5} fill="var(--color-surface-2)" />
-          <g stroke={CREAM} strokeWidth="1.5" opacity="0.22">
-            <line x1="10" y1={C} x2="290" y2={C} />
-            <line x1={C} y1="10" x2={C} y2="290" />
-          </g>
-        </motion.g>
-        {[46.5, 92.5, 138.5].map((r, i) => (
-          <Ring key={r} time={time} r={r} i={i} />
-        ))}
-      </svg>
-      {/* lancetta + scia: l'intero disegno ruota attorno al suo centro */}
-      <motion.svg viewBox="0 0 300 300" style={{ ...box, rotate: sweepRotate, opacity: sweepOpacity }}>
-        {TRAIL.map((t, i) => (
-          <path key={i} d={t.d} fill={YELLOW} opacity={t.opacity} />
-        ))}
-        <line x1={C} y1={C} x2="249" y2="51" stroke={YELLOW} strokeWidth="9" strokeLinecap="round" />
-      </motion.svg>
-      {BLIPS.map((b, i) => (
-        <Blip key={i} time={time} b={b} />
-      ))}
-      <motion.div
-        style={{
-          position: "absolute",
-          left: 135 - coreSize / 2,
-          top: 135 - coreSize / 2,
-          width: coreSize,
-          height: coreSize,
-          boxSizing: "border-box",
-          border: `2.25px solid ${CREAM}`,
-          borderRadius: "50%",
-          background: ACCENT,
-          scale: coreScale,
-        }}
-      />
-    </motion.div>
+      <Word time={time} at={0.2} instant={instant}>
+        L&apos;AI
+      </Word>
+      <Word time={time} at={0.35} instant={instant}>
+        CHE
+      </Word>
+      <Word time={time} at={0.5} instant={instant}>
+        <motion.span
+          style={{ display: "inline-block", padding: "0 12px 6px", background: INK, color: YELLOW, rotate: blockRotate }}
+        >
+          CONTA.
+        </motion.span>
+      </Word>
+    </div>
   );
 }
 
-// onde che si allargano dal radar, sincronizzate con la lancetta
-function Pulse({ time, offset }: { time: Time; offset: number }) {
-  const phase = (t: number) => (t < 0.9 + offset ? 1 : ((t - 0.9 - offset) % 2.4) / 2.4);
-  const scale = useTransform(time, (t) => 0.9 + 1.7 * easeOut(phase(t)));
-  const opacity = useTransform(time, (t) => 0.4 * (1 - phase(t)));
+// frase d'accento accanto a "CHE"
+function Phrase({ time, instant }: { time: Time; instant: boolean }) {
+  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - 0.9) / 0.5)));
+  const opacity = useTransform(time, (t) => p(t));
+  const y = useTransform(time, (t) => 14 * (1 - p(t)));
+  return (
+    <motion.p
+      style={{
+        position: "absolute",
+        left: 218,
+        top: 168,
+        width: 150,
+        margin: 0,
+        fontFamily: ACCENT_SERIF,
+        fontStyle: "italic",
+        fontSize: 23,
+        lineHeight: 1.02,
+        color: INK,
+        opacity,
+        y,
+      }}
+    >
+      segnali dal web, scelti da te.
+    </motion.p>
+  );
+}
+
+// ---------- contatore "segnali in arrivo": adesivo nero accanto a "L'AI" ----------
+function Counter({ time }: { time: Time }) {
+  const n = useTransform(time, (t) => String(Math.round(128 * easeOut(clamp01((t - 0.9) / 2.7)))));
+  const scale = useTransform(time, (t) => backOut(clamp01((t - 0.8) / 0.5)));
   return (
     <motion.div
       style={{
         position: "absolute",
-        left: RADAR_CENTER.x - 135,
-        top: RADAR_CENTER.y - 135,
-        width: 270,
-        height: 270,
-        boxSizing: "border-box",
-        border: `2px solid ${ACCENT}`,
-        borderRadius: "50%",
+        left: 236,
+        top: 92,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        padding: "8px 12px 9px",
+        background: INK,
+        boxShadow: `4px 4px 0 ${ACCENT}`,
+        color: CREAM,
+        rotate: 4,
         scale,
-        opacity,
+        opacity: scale,
       }}
-    />
-  );
-}
-
-// ---------- contatore "segnali in arrivo" (in alto, lascia il posto al titolo) ----------
-function Counter({ time }: { time: Time }) {
-  const n = useTransform(time, (t) => String(Math.round(128 * easeOut(clamp01((t - 0.9) / 2.9)))).padStart(3, "0"));
-  const y = useTransform(time, (t) => 40 * (1 - backOut(clamp01((t - 0.3) / 0.6))) - 90 * easeInOut(clamp01((t - 4.0) / 0.4)));
-  const opacity = useTransform(time, (t) => clamp01((t - 0.3) / 0.2) * (1 - clamp01((t - 4.0) / 0.35)));
-  return (
-    <motion.div style={{ position: "absolute", left: 24, top: 56, display: "flex", alignItems: "flex-end", gap: 12, y, opacity }}>
-      <motion.span
+    >
+      <motion.b
         style={{
           fontFamily: DISPLAY,
           fontWeight: 800,
-          fontSize: 96,
-          lineHeight: 0.85,
+          fontSize: 44,
+          lineHeight: 0.9,
           letterSpacing: "-0.05em",
+          color: YELLOW,
           fontVariantNumeric: "tabular-nums",
         }}
       >
         {n}
-      </motion.span>
-      <span
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          paddingBottom: 4,
-          fontFamily: MONO,
-          fontWeight: 700,
-          fontSize: 11,
-          lineHeight: 1,
-          letterSpacing: "0.12em",
-        }}
-      >
-        <span>SEGNALI</span>
-        <span style={{ color: YELLOW }}>IN ARRIVO</span>
+      </motion.b>
+      <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 8.5, lineHeight: 1.1, letterSpacing: "0.12em" }}>
+        SEGNALI IN ARRIVO
       </span>
     </motion.div>
   );
 }
 
-// ---------- titolo RADAR: identico a quello della schermata iniziale ----------
-const WORD = "RADAR".split("");
-
-function TitleLetter({ time, ch, start, instant }: { time: Time; ch: string; start: number; instant: boolean }) {
-  const y = useTransform(time, (t) => `${instant ? 0 : (1 - easeOut(clamp01((t - start) / 0.55))) * 110}%`);
-  return <motion.span style={{ display: "inline-block", y }}>{ch}</motion.span>;
-}
-
-function Title({ time, instant }: { time: Time; instant: boolean }) {
-  const at = instant ? 0 : 4.1;
-  const opacity = useTransform(time, (t) => (instant ? 1 : clamp01((t - at) / 0.12)));
-  const scale = useTransform(time, (t) => (instant ? 1 : 0.85 + 0.15 * backOut(clamp01((t - at) / 0.5))));
-  const liveScale = useTransform(time, (t) => (instant ? 1 : backOut(clamp01((t - 4.85) / 0.45))));
+// ---------- nastro nero con i temi che scorre ----------
+function Tape({ time }: { time: Time }) {
+  const group = useRef<HTMLDivElement>(null);
+  const enter = useTransform(time, (t) => -520 * (1 - easeOut(clamp01((t - 0.9) / 0.6))));
+  const scroll = useTransform(time, (t) => -((t * 55) % (group.current?.offsetWidth || 900)));
   return (
-    <>
-      <motion.div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: 62,
-          width: "max-content",
-          marginInline: "auto",
-          boxSizing: "border-box",
-          display: "flex",
-          overflow: "hidden",
-          padding: "7px 18px",
-          background: YELLOW,
-          border: `3px solid ${CREAM}`,
-          boxShadow: `4px 4px 0 ${CREAM}`,
-          color: "var(--color-card-ink)",
-          fontFamily: "var(--font-unbounded), var(--font-bricolage), system-ui, sans-serif",
-          fontWeight: 900,
-          fontSize: 54,
-          lineHeight: 1.1,
-          letterSpacing: "-0.02em",
-          rotate: -1.5,
-          scale,
-          opacity,
-        }}
-      >
-        {WORD.map((ch, i) => (
-          <TitleLetter key={i} time={time} ch={ch} start={at + 0.1 + i * 0.07} instant={instant} />
+    <motion.div
+      style={{
+        position: "absolute",
+        left: -20,
+        top: 338,
+        width: 430,
+        height: 28,
+        display: "flex",
+        alignItems: "center",
+        overflow: "hidden",
+        background: INK,
+        color: YELLOW,
+        rotate: -2.5,
+        x: enter,
+      }}
+    >
+      <motion.div style={{ display: "flex", width: "max-content", x: scroll }}>
+        {[0, 1].map((g) => (
+          <div key={g} ref={g === 0 ? group : undefined} style={{ display: "flex", flex: "none" }}>
+            {TOPICS.map((topic, i) => (
+              <span
+                key={topic}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingRight: 10,
+                  whiteSpace: "nowrap",
+                  fontFamily: MONO,
+                  fontWeight: 700,
+                  fontSize: 11,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {topic}
+                <i
+                  style={{
+                    display: "block",
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: i % 2 ? ACCENT : CREAM,
+                  }}
+                />
+              </span>
+            ))}
+          </div>
         ))}
       </motion.div>
-      {/* adesivo LIVE: nello stesso punto della schermata iniziale */}
-      <motion.span
-        style={{
-          position: "absolute",
-          left: 344,
-          top: 66,
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "5px 12px",
-          border: `3px solid ${CREAM}`,
-          background: ACCENT,
-          boxShadow: `4px 4px 0 ${CREAM}`,
-          color: "var(--color-card-ink)",
-          fontFamily: MONO,
-          fontWeight: 700,
-          fontSize: 12,
-          lineHeight: 1,
-          x: "-50%",
-          y: "-50%",
-          rotate: -5,
-          scale: liveScale,
-        }}
-      >
-        <i style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: "var(--color-card-ink)" }} />
-        LIVE
-      </motion.span>
-    </>
+    </motion.div>
+  );
+}
+
+// ---------- adesivo "SI PARTE!" sul blocco CONTA. ----------
+function GoSticker({ time }: { time: Time }) {
+  const p = (t: number) => backOut(clamp01((t - 4.3) / 0.45));
+  const scale = useTransform(time, (t) => p(t));
+  const rotate = useTransform(time, (t) => -8 + 24 * (1 - p(t)));
+  return (
+    <motion.span
+      style={{
+        position: "absolute",
+        left: 318,
+        top: 246,
+        padding: "3px 12px",
+        border: `3px solid ${INK}`,
+        borderRadius: 999,
+        background: ACCENT,
+        boxShadow: `3px 3px 0 ${INK}`,
+        color: INK,
+        fontFamily: MARKER,
+        fontSize: 19,
+        lineHeight: 1.2,
+        whiteSpace: "nowrap",
+        x: "-50%",
+        y: "-50%",
+        scale,
+        opacity: scale,
+        rotate,
+      }}
+    >
+      SI PARTE!
+    </motion.span>
   );
 }
 
@@ -364,35 +301,61 @@ function Bar({ time }: { time: Time }) {
           fontSize: 11,
           lineHeight: 1,
           letterSpacing: "0.14em",
+          color: INK,
         }}
       >
         <motion.span>{status}</motion.span>
-        <motion.span style={{ color: YELLOW, fontSize: 14, letterSpacing: 0 }}>{percent}</motion.span>
+        <motion.span style={{ fontSize: 15, letterSpacing: 0 }}>{percent}</motion.span>
       </div>
       <div
         style={{
           height: 28,
           boxSizing: "border-box",
           overflow: "hidden",
-          border: `3px solid ${CREAM}`,
-          background: "var(--color-surface)",
-          boxShadow: `4px 4px 0 ${ACCENT}`,
+          border: `3px solid ${INK}`,
+          background: CREAM,
+          boxShadow: `4px 4px 0 ${INK}`,
         }}
       >
         <motion.div
           style={{
             height: "100%",
             boxSizing: "border-box",
-            borderRight: "3px solid var(--color-card-ink)",
-            backgroundColor: YELLOW,
-            backgroundImage:
-              "repeating-linear-gradient(-45deg, rgba(0,0,0,0.16) 0 8px, transparent 8px 16px)",
+            backgroundColor: INK,
+            backgroundImage: "repeating-linear-gradient(-45deg, #2b2b2b 0 8px, transparent 8px 16px)",
             backgroundPosition: stripes,
             width,
           }}
         />
       </div>
     </motion.div>
+  );
+}
+
+// ---------- strappo: tre strisce colorate attraversano lo schermo ----------
+const STRIPE_COLORS = [INK, CREAM, ACCENT]; // dal fondo alla cima: l'ultima a restare è quella nera, come lo sfondo dello Splash
+
+function Stripe({ time, i, geometry }: { time: Time; i: number; geometry: Geometry }) {
+  const x = useTransform(time, (t) => {
+    const travel = geometry.current.w + 400;
+    const enter = easeInOut(clamp01((t - (BAR_SECONDS + i * STRIPE_STAGGER)) / STRIPE_SECONDS));
+    const leave = easeInOut(clamp01((t - (PEEL_AT + (STRIPES - 1 - i) * STRIPE_STAGGER)) / STRIPE_SECONDS));
+    return -travel * (1 - enter) + travel * leave;
+  });
+  return (
+    <motion.div
+      style={{
+        position: "absolute",
+        top: -80,
+        bottom: -80,
+        left: -200,
+        right: -200,
+        background: STRIPE_COLORS[i],
+        skewX: -8,
+        x,
+        zIndex: 10 + i,
+      }}
+    />
   );
 }
 
@@ -415,7 +378,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const reduce = usePrefersReducedMotion();
   const time = useMotionValue(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const geometry = useRef({ w: ART_W, h: ART_H, cx: ART_W / 2, cy: RADAR_CENTER.y });
+  const geometry = useRef({ w: ART_W, h: ART_H });
   const [scale, setScale] = useState(0); // 0 = non ancora misurato (resta nascosto)
 
   // l'artboard 390 x 844 si adatta allo schermo, come la schermata iniziale
@@ -425,9 +388,8 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     const observer = new ResizeObserver(() => {
       const w = el.clientWidth;
       const h = el.clientHeight;
-      const s = Math.min(w / ART_W, h / ART_H);
-      geometry.current = { w, h, cx: w / 2, cy: h / 2 - RADAR_DY * s };
-      setScale(s);
+      geometry.current = { w, h };
+      setScale(Math.min(w / ART_W, h / ART_H));
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -436,7 +398,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const handleReveal = useEffectEvent(onReveal);
   const handleDone = useEffectEvent(onDone);
 
-  // l'orologio: da 0 a 5,75 secondi, in linea retta
+  // l'orologio: da 0 a 6 secondi, in linea retta
   useEffect(() => {
     // /?intro-t=3.2 → ferma l'orologio al secondo 3,2 (serve a controllare un fotogramma)
     const frozen = new URLSearchParams(window.location.search).get("intro-t");
@@ -446,10 +408,12 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     }
     time.set(0);
     let revealed = false;
+    // con le strisce lo Splash si monta quando tutto è coperto; con "Riduci movimento" subito, sotto la dissolvenza
+    const revealAt = reduce ? BAR_SECONDS : REVEAL_AT;
     const stop = time.on("change", (t) => {
-      if (!revealed && t >= BAR_SECONDS) {
+      if (!revealed && t >= revealAt) {
         revealed = true;
-        handleReveal(); // lo Splash viene montato sotto: si apre insieme al foro
+        handleReveal();
       }
     });
     const controls = animate(time, TOTAL_SECONDS, {
@@ -461,23 +425,18 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       stop();
       controls.stop();
     };
-  }, [time]);
+  }, [time, reduce]);
 
-  // uscita: foro circolare centrato sul radar (stesso centro della schermata iniziale)
-  const mask = useTransform(time, (t) => {
-    if (t < BAR_SECONDS) return "none";
-    const { w, h, cx, cy } = geometry.current;
-    const p = easeInOut(clamp01((t - BAR_SECONDS - 0.1) / 0.65));
-    const r = -3 + p * (Math.hypot(w, h) + 3);
-    return `radial-gradient(circle at ${cx}px ${cy}px, transparent ${r}px, #000 ${r + 2}px)`;
-  });
-  // con "Riduci movimento": niente foro, solo dissolvenza
-  const fade = useTransform(time, (t) => 1 - clamp01((t - BAR_SECONDS) / 0.4));
-  const contentOut = useTransform(time, (t) => 1 - clamp01((t - BAR_SECONDS) / 0.3));
-  const contentScale = useTransform(time, (t) => 1 - 0.06 * easeOut(clamp01((t - BAR_SECONDS) / 0.3)));
+  // il poster sparisce quando le strisce lo coprono del tutto (o si dissolve, con "Riduci movimento")
+  const posterOpacity = useTransform(time, (t) =>
+    reduce ? 1 - clamp01((t - BAR_SECONDS) / 0.4) : t < REVEAL_AT ? 1 : 0,
+  );
+  // reticolo di puntini (mezzatinta) che scivola in diagonale
+  const dotX = useTransform(time, (t) => (t * 7) % 26);
+  const dotY = useTransform(time, (t) => (t * 14) % 52);
 
   return (
-    <motion.div
+    <div
       ref={rootRef}
       role="status"
       aria-label="Caricamento di Radar"
@@ -487,63 +446,55 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
         zIndex: 110,
         height: "100dvh",
         overflow: "hidden",
-        background: "var(--color-bg)",
-        color: CREAM,
         fontFamily: DISPLAY,
-        ...(reduce ? { opacity: fade } : { maskImage: mask }),
       }}
     >
-      {/* sfondo: codice Python che scorre piano (lo stesso della schermata iniziale) */}
-      {!reduce && (
+      <motion.div style={{ position: "absolute", inset: 0, background: YELLOW, opacity: posterOpacity }}>
+        {!reduce && (
+          <motion.div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: -52,
+              opacity: 0.1,
+              backgroundImage:
+                "radial-gradient(circle at 25% 25%, #000 1.1px, transparent 1.5px), radial-gradient(circle at 75% 75%, #000 1.1px, transparent 1.5px)",
+              backgroundSize: "26px 52px",
+              x: dotX,
+              y: dotY,
+            }}
+          />
+        )}
+
         <div
           aria-hidden="true"
-          style={
-            {
-              position: "absolute",
-              inset: 0,
-              containerType: "size", // serve alle colonne extra sui computer
-              "--u": "min(calc(100vw / 390), calc(100dvh / 844))",
-            } as React.CSSProperties
-          }
-        >
-          <CodeRain />
-        </div>
-      )}
-
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          width: ART_W,
-          height: ART_H,
-          marginLeft: -ART_W / 2,
-          marginTop: -ART_H / 2,
-          transform: `scale(${scale})`,
-          visibility: scale > 0 ? "visible" : "hidden",
-        }}
-      >
-        <motion.div
           style={{
             position: "absolute",
-            inset: 0,
-            ...(reduce ? {} : { opacity: contentOut, scale: contentScale }),
+            left: "50%",
+            top: "50%",
+            width: ART_W,
+            height: ART_H,
+            marginLeft: -ART_W / 2,
+            marginTop: -ART_H / 2,
+            transform: `scale(${scale})`,
+            visibility: scale > 0 ? "visible" : "hidden",
           }}
         >
+          <Headline time={time} instant={reduce} />
+          <Phrase time={time} instant={reduce} />
           {!reduce && (
             <>
-              <Pulse time={time} offset={0} />
-              <Pulse time={time} offset={1.2} />
               <Counter time={time} />
-              <Radar time={time} />
+              <Tape time={time} />
               <Tiles time={time} />
+              <GoSticker time={time} />
             </>
           )}
-          <Title time={time} instant={reduce} />
           <Bar time={time} />
-        </motion.div>
-      </div>
-    </motion.div>
+        </div>
+      </motion.div>
+
+      {!reduce && STRIPE_COLORS.map((_, i) => <Stripe key={i} time={time} i={i} geometry={geometry} />)}
+    </div>
   );
 }
