@@ -37,5 +37,5 @@ export type SignalsResponse = {
   // finestra più stretta che ne contiene almeno uno. null se nessuno è arrivato negli ultimi 7 giorni.
   recent: { count: number; seconds: number } | null;
   count: number; // quanti contenuti ha raccolto Radar in totale
-  items: Signal[]; // video, articolo (più recente), articolo (di un'altra fonte), thread, release, podcast: quelli che esistono
+  items: Signal[]; // gli ultimi contenuti veri di tutti i formati, dal più recente (max 2 per formato)
 };

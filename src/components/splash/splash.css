@@ -127,6 +127,12 @@
   box-sizing: border-box;
 }
 
+/* nell'intro gialla il codice è inchiostro scuro (nello Splash è crema su nero) */
+.intro-code .splash-code {
+  color: var(--color-card-ink);
+  opacity: 0.3;
+}
+
 /* le colonne esterne servono solo su schermi larghi (computer) */
 .splash-code-outer {
   display: none;

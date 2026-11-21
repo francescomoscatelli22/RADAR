@@ -43,7 +43,19 @@ export async function GET() {
 
   const db = createClient(url, key, { auth: { persistSession: false } });
   const latest = (platform: string, n: number) =>
-    db.from("items").select(COLUMNS).eq("platform", platform).order("published_at", { ascending: false }).limit(n);
+    db
+      .from("items")
+      .select(COLUMNS)
+      .eq("platform", platform)
+      .order("published_at", { ascending: false })
+      // stesso filtro del feed: tag tecnici di build non sono release da mostrare
+      .not("title", "like", "ciflow/%")
+      .not("title", "like", "trunk/%")
+      .not("title", "ilike", "%alpha%")
+      .not("title", "ilike", "%nightly%")
+      .not("title", "like", "viable/%")
+      .not("title", "match", "^b[0-9]+")
+      .limit(n);
 
   // quanti segnali sono arrivati in ogni finestra di tempo (si conta soltanto, senza scaricare righe)
   const now = Date.now();
@@ -58,11 +70,11 @@ export async function GET() {
   const [total, video, articles, thread, release, podcast, windows] = await Promise.all([
     // head: true = conta soltanto, senza scaricare le righe
     db.from("items").select("id", { count: "exact", head: true }),
-    latest("youtube", 1),
-    latest("article", 15),
-    latest("hn", 1),
-    latest("github", 1),
-    latest("podcast", 1),
+    latest("youtube", 8),
+    latest("article", 12),
+    latest("hn", 8),
+    latest("github", 8),
+    latest("podcast", 8),
     windowCounts,
   ]);
 
@@ -70,25 +82,24 @@ export async function GET() {
     return Response.json({ error: "Lettura non riuscita" }, { status: 502 });
   }
 
-  const first = (res: { data: unknown }) => (res.data as Row[] | null)?.[0];
-  const articleRows = (articles.data as Row[] | null) ?? [];
-  const firstArticle = articleRows[0];
-  // il secondo articolo viene da una fonte diversa, così i due blocchi non sono dello stesso sito
-  const otherSource = (r: Row) => {
-    const a = Array.isArray(r.sources) ? r.sources[0] : r.sources;
-    const b = Array.isArray(firstArticle?.sources) ? firstArticle.sources[0] : firstArticle?.sources;
-    return a?.name !== b?.name;
-  };
-  const secondArticle = articleRows.slice(1).find(otherSource) ?? articleRows[1];
+  // Gli ultimi contenuti veri in ordine cronologico, dal più recente: si mescolano tutti i
+  // formati e si prendono i primi, al massimo 2 per formato così il poster resta vario.
+  const pool: { kind: SignalKind; row: Row }[] = [
+    ...((video.data as Row[] | null) ?? []).map((row) => ({ kind: "video" as const, row })),
+    ...((articles.data as Row[] | null) ?? []).map((row) => ({ kind: "article" as const, row })),
+    ...((thread.data as Row[] | null) ?? []).map((row) => ({ kind: "thread" as const, row })),
+    ...((release.data as Row[] | null) ?? []).map((row) => ({ kind: "release" as const, row })),
+    ...((podcast.data as Row[] | null) ?? []).map((row) => ({ kind: "podcast" as const, row })),
+  ].sort((a, b) => new Date(b.row.published_at).getTime() - new Date(a.row.published_at).getTime());
 
-  const items: Signal[] = [
-    first(video) && toSignal("video", first(video)!),
-    firstArticle && toSignal("article", firstArticle),
-    secondArticle && toSignal("article", secondArticle),
-    first(thread) && toSignal("thread", first(thread)!),
-    first(release) && toSignal("release", first(release)!),
-    first(podcast) && toSignal("podcast", first(podcast)!),
-  ].filter((s): s is Signal => Boolean(s));
+  const perKind: Partial<Record<SignalKind, number>> = {};
+  const items: Signal[] = [];
+  for (const { kind, row } of pool) {
+    if ((perKind[kind] ?? 0) >= 2) continue;
+    perKind[kind] = (perKind[kind] ?? 0) + 1;
+    items.push(toSignal(kind, row));
+    if (items.length === 6) break;
+  }
 
   // la finestra più stretta con almeno un segnale (le finestre sono in ordine crescente)
   const hit = windows.find((w) => (w.count ?? 0) > 0);

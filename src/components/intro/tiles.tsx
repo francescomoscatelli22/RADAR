@@ -48,10 +48,12 @@ const initials = (name: string) =>
     .toUpperCase();
 
 /** Testo che si scrive da solo, lettera per lettera (con cursore finché non ha finito). */
-function useTyped(time: Time, text: string, start: number, dur: number) {
-  return useTransform(time, (t) => {
+function useTyped(time: Time, live: Time, text: string, start: number, dur: number) {
+  // il cursore lampeggia sempre (orologio libero), anche dopo che il testo e' finito
+  return useTransform([time, live], ([t, l]: number[]) => {
     const n = Math.floor(clamp01((t - start) / dur) * text.length);
-    return text.slice(0, n) + (n < text.length && t >= start ? "▍" : "");
+    const blink = Math.floor(l * 2.2) % 2 === 0;
+    return text.slice(0, n) + (t >= start && (n < text.length || blink) ? "▍" : "");
   });
 }
 
@@ -71,13 +73,13 @@ function Play({ size, color }: { size: number; color: string }) {
   );
 }
 
-type BodyProps = { time: Time; at: number; signal: Signal };
+type BodyProps = { time: Time; live: Time; at: number; signal: Signal };
 
 // ---------- video: il play pulsa e la barra di avanzamento si riempie ----------
-function VideoBody({ time, at, signal }: BodyProps) {
+function VideoBody({ time, live, at, signal }: BodyProps) {
   // la barra del video si riempie e riparte da capo, come un video che gira
-  const fill = useTransform(time, (t) => `${t < at + 0.2 ? 0 : (((t - at - 0.2) % 3.6) / 3.6) * 100}%`);
-  const pulse = useTransform(time, (t) => 1 + 0.14 * Math.sin((t - at) * 7));
+  const fill = useTransform([time, live], ([t, l]: number[]) => `${t < at + 0.2 ? 0 : (((l * 1) % 3.6) / 3.6) * 100}%`);
+  const pulse = useTransform(live, (l) => 1 + 0.14 * Math.sin(l * 7));
   return (
     <div style={{ display: "flex", gap: 8, flex: 1, minHeight: 0 }}>
       <div
@@ -126,8 +128,8 @@ function VideoBody({ time, at, signal }: BodyProps) {
 }
 
 // ---------- articolo (versione "scritto a macchina"): il titolo si scrive da solo ----------
-function TypedArticleBody({ time, at, signal }: BodyProps) {
-  const typed = useTyped(time, signal.title, at + 0.4, Math.min(3, signal.title.length * 0.04));
+function TypedArticleBody({ time, live, at, signal }: BodyProps) {
+  const typed = useTyped(time, live, signal.title, at + 0.4, Math.min(3, signal.title.length * 0.04));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -160,9 +162,9 @@ function TypedArticleBody({ time, at, signal }: BodyProps) {
 }
 
 // ---------- articolo: il titolo sale da sotto una "finestra" ----------
-function ArticleBody({ time, at, signal }: BodyProps) {
+function ArticleBody({ time, live, at, signal }: BodyProps) {
   const y = useTransform(time, (t) => `${(1 - easeOut(clamp01((t - at - 0.15) / 0.5))) * 115}%`);
-  const sourceOpacity = useTransform(time, (t) => clamp01((t - at - 0.9) / 0.3));
+  const sourceOpacity = useTransform([time, live], ([t, l]: number[]) => clamp01((t - at - 0.9) / 0.3) * (0.8 + 0.2 * Math.sin(l * 2.2)));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 0 }}>
       <div style={{ overflow: "hidden" }}>
@@ -190,13 +192,14 @@ function ArticleBody({ time, at, signal }: BodyProps) {
 }
 
 // ---------- thread: il contatore dei punti sale fino ai punti veri ----------
-function ThreadBody({ time, at, signal }: BodyProps) {
+function ThreadBody({ time, live, at, signal }: BodyProps) {
   const total = signal.points ?? 0;
   const points = useTransform(time, (t) => String(Math.round(total * easeOut(clamp01((t - at - 0.1) / 2.8)))));
+  const arrowY = useTransform(live, (l) => -Math.abs(Math.sin(l * 3)) * 3); // la freccia salta in su ritmicamente
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "none", width: 64 }}>
-        <span style={{ fontSize: 9, lineHeight: 1 }}>▲</span>
+        <motion.span style={{ fontSize: 9, lineHeight: 1, y: arrowY }}>▲</motion.span>
         <motion.b
           style={{
             fontFamily: DISPLAY,
@@ -220,12 +223,12 @@ function ThreadBody({ time, at, signal }: BodyProps) {
 }
 
 // ---------- release: il pannello nero si "scrive" con i dati della release ----------
-function CodeLine({ time, text, start, bold }: { time: Time; text: string; start: number; bold?: boolean }) {
-  const typed = useTyped(time, text, start, 0.9);
+function CodeLine({ time, live, text, start, bold }: { time: Time; live: Time; text: string; start: number; bold?: boolean }) {
+  const typed = useTyped(time, live, text, start, 0.9);
   return <motion.span style={{ ...oneLine, fontWeight: bold ? 700 : 400, minHeight: 10 }}>{typed}</motion.span>;
 }
 
-function ReleaseBody({ time, at, signal }: BodyProps) {
+function ReleaseBody({ time, live, at, signal }: BodyProps) {
   return (
     <div
       style={{
@@ -243,23 +246,23 @@ function ReleaseBody({ time, at, signal }: BodyProps) {
         lineHeight: 1.25,
       }}
     >
-      <CodeLine time={time} text={`${signal.title} · ${signal.source.toUpperCase()}`} start={at + 0.4} bold />
-      <CodeLine time={time} text="nuova release" start={at + 1.4} />
-      <CodeLine time={time} text={agoText(signal.ageMinutes).toLowerCase()} start={at + 2.5} />
+      <CodeLine time={time} live={live} text={`${signal.title} · ${signal.source.toUpperCase()}`} start={at + 0.4} bold />
+      <CodeLine time={time} live={live} text="nuova release" start={at + 1.4} />
+      <CodeLine time={time} live={live} text={agoText(signal.ageMinutes).toLowerCase()} start={at + 2.5} />
     </div>
   );
 }
 
 // ---------- podcast: la forma d'onda pulsa ----------
-function WaveBar({ time, at, i }: { time: Time; at: number; i: number }) {
-  const scaleY = useTransform(time, (t) => {
+function WaveBar({ time, live, at, i }: { time: Time; live: Time; at: number; i: number }) {
+  const scaleY = useTransform([time, live], ([t, l]: number[]) => {
     const grow = easeOut(clamp01((t - at - 0.15 - i * 0.02) / 0.4));
-    return grow * (0.2 + 0.8 * Math.abs(Math.sin(t * 5.5 + i * 0.75)));
+    return grow * (0.2 + 0.8 * Math.abs(Math.sin(l * 5.5 + i * 0.75)));
   });
   return <motion.i style={{ display: "block", flex: "none", width: 4, height: 14, background: INK, scaleY }} />;
 }
 
-function PodcastBody({ time, at, signal }: BodyProps) {
+function PodcastBody({ time, live, at, signal }: BodyProps) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 0 }}>
       <div
@@ -285,7 +288,7 @@ function PodcastBody({ time, at, signal }: BodyProps) {
         </small>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 14 }}>
           {Array.from({ length: 14 }, (_, i) => (
-            <WaveBar key={i} time={time} at={at} i={i} />
+            <WaveBar key={i} time={time} live={live} at={at} i={i} />
           ))}
         </div>
       </div>
@@ -305,37 +308,33 @@ const STYLE: Record<Kind, { bg: string; label: string; Body: (p: BodyProps) => R
   podcast: { bg: "var(--color-card-audio)", label: "PODCAST", Body: PodcastBody },
 };
 
-// i sei posti sul poster (a coppie, leggermente storti)
+// i quattro posti sul poster (due file di due, leggermente storti); sotto resta lo spazio per "Tocca per continuare"
 const SLOTS = [
   { x: 24, y: 396, rot: -1.5 },
   { x: 200, y: 402, rot: 1.2 },
   { x: 24, y: 498, rot: 1 },
   { x: 200, y: 504, rot: -1.2 },
-  { x: 24, y: 600, rot: -1 },
-  { x: 200, y: 606, rot: 1.5 },
 ];
 
 const FIRST_AT = 2.8; // il primo blocco arriva a 2,8 s, dopo le parole giganti
-const GAP = 0.6; // e gli altri a distanza di 0,6 s (l'ultimo arriva a 5,8 s)
+const GAP = 0.6; // e gli altri a distanza di 0,6 s (l'ultimo arriva a 4,6 s)
 
 type Placed = { kind: Kind; signal: Signal };
 
-/** Mette i contenuti veri nell'ordine del poster; salta i formati che non hanno contenuti. */
+/**
+  Mette i contenuti veri sul poster nell'ordine in cui arrivano dal server: cronologico,
+  dal più recente (si legge a righe: in alto a sinistra il più nuovo). Gli articoli
+  alternano le due grafiche (con logo della fonte / semplice) per non sembrare uguali.
+*/
 function arrange(items: Signal[]): Placed[] {
-  const articles = items.filter((s) => s.kind === "article");
-  const find = (kind: SignalKind) => items.find((s) => s.kind === kind);
-  const order: (Placed | null)[] = [
-    find("video") ? { kind: "video", signal: find("video")! } : null,
-    articles[1] ? { kind: "article-typed", signal: articles[1] } : null,
-    articles[0] ? { kind: "article", signal: articles[0] } : null,
-    find("thread") ? { kind: "thread", signal: find("thread")! } : null,
-    find("release") ? { kind: "release", signal: find("release")! } : null,
-    find("podcast") ? { kind: "podcast", signal: find("podcast")! } : null,
-  ];
-  return order.filter((p): p is Placed => p !== null);
+  let articleN = 0;
+  return items.slice(0, SLOTS.length).map((signal) => {
+    if (signal.kind !== "article") return { kind: signal.kind, signal };
+    return { kind: articleN++ % 2 === 0 ? "article-typed" : "article", signal };
+  });
 }
 
-function Tile({ time, placed, index }: { time: Time; placed: Placed; index: number }) {
+function Tile({ time, live, placed, index }: { time: Time; live: Time; placed: Placed; index: number }) {
   const { x, y, rot } = SLOTS[index];
   const { bg, label, Body } = STYLE[placed.kind];
   const { signal } = placed;
@@ -349,11 +348,14 @@ function Tile({ time, placed, index }: { time: Time; placed: Placed; index: numb
   const tx = useTransform(time, (t) => side * 420 * (1 - enter(t)));
   // dopo l'arrivo il blocco "respira" piano su e giù, così lo schermo non si ferma mai
   const ty = useTransform(
-    time,
-    (t) => 40 * (1 - enter(t)) + Math.sin((t - at) * 1.7 + index * 1.3) * 2.4 * clamp01((t - at - 0.7) / 0.6),
+    [time, live],
+    ([t, l]: number[]) => 40 * (1 - enter(t)) + Math.sin(l * 1.7 + index * 1.3) * 3.2 * clamp01((t - at - 0.7) / 0.6),
   );
   const scale = useTransform(time, (t) => 0.7 + 0.3 * enter(t));
-  const rotate = useTransform(time, (t) => rot + dir * 22 * (1 - enter(t)));
+  const rotate = useTransform(
+    [time, live],
+    ([t, l]: number[]) => rot + dir * 22 * (1 - enter(t)) + Math.sin(l * 1.2 + index * 2) * 0.8 * clamp01((t - at - 0.7) / 0.6),
+  );
   const opacity = useTransform(time, (t) => clamp01((t - at) / 0.1));
 
   return (
@@ -395,16 +397,16 @@ function Tile({ time, placed, index }: { time: Time; placed: Placed; index: numb
         <span>{label}</span>
         <span style={{ opacity: 0.6 }}>{agoText(signal.ageMinutes)}</span>
       </div>
-      <Body time={time} at={at} signal={signal} />
+      <Body time={time} live={live} at={at} signal={signal} />
     </motion.div>
   );
 }
 
-export default function Tiles({ time, items }: { time: Time; items: Signal[] }) {
+export default function Tiles({ time, live, items }: { time: Time; live: Time; items: Signal[] }) {
   return (
     <>
       {arrange(items).map((placed, i) => (
-        <Tile key={`${placed.kind}-${placed.signal.title}`} time={time} placed={placed} index={i} />
+        <Tile key={`${placed.kind}-${placed.signal.title}`} time={time} live={live} placed={placed} index={i} />
       ))}
     </>
   );

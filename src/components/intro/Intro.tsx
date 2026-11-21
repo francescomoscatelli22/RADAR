@@ -5,6 +5,7 @@ import { animate, motion, useMotionValue, useTransform, type AnimationPlaybackCo
 import DevPause from "./DevPause";
 import { windowLabel, type Signal, type SignalsResponse } from "@/lib/signals";
 import { useOpeningCategories } from "../splash/news";
+import CodeRain from "../splash/CodeRain";
 import Tiles from "./tiles";
 import {
   ACCENT_SERIF,
@@ -35,9 +36,10 @@ import {
   Cosa si vede (il tempo è quello dell'orologio unico `time`):
     0,5 – 2,8 s  le parole "L'AI / CHE / CONTA." salgono una alla volta (lente, una ogni 0,6 s)
     2,3 – 3,6 s  arrivano il contatore, la frase d'accento e il nastro
-    2,8 – 5,8 s  i 6 formati del feed arrivano dai lati come adesivi, uno ogni 0,6 s, ognuno con la sua micro-animazione
+    2,8 – 4,6 s  i 4 formati del feed (due file) arrivano dai lati come adesivi, uno ogni 0,6 s, ognuno con la sua micro-animazione
     7,4 s        adesivo "SI PARTE!"
-    8,5 – 9,5 s  strappo a strisce → schermata iniziale
+    8,5 s        barra al 100%: l'orologio si ferma e compaiono "Tocca per continuare" e "Imposta lingua"
+    dopo il tocco  strappo a strisce (circa 1 s) → schermata iniziale
 
   Contatore e blocchi mostrano dati VERI (quanti contenuti ha raccolto Radar e gli ultimi per formato,
   da /api/signals): se il database non risponde, il contatore dice "—" e i blocchi non compaiono.
@@ -48,6 +50,7 @@ const INK = "var(--color-card-ink)";
 const YELLOW = "var(--color-card-article)";
 const CREAM = "var(--color-cream)";
 const ACCENT = "var(--color-accent)";
+const GREEN = "var(--color-card-audio)";
 
 type Geometry = RefObject<{ w: number; h: number }>;
 
@@ -63,8 +66,10 @@ function Word({ time, at, instant, children }: { time: Time; at: number; instant
   );
 }
 
-function Headline({ time, instant }: { time: Time; instant: boolean }) {
-  const blockRotate = useTransform(time, (t) => -1.5 + (instant ? 0 : Math.sin(t * 2.4) * 0.6));
+function Headline({ time, live, instant }: { time: Time; live: Time; instant: boolean }) {
+  // `live` e' l'orologio che non si ferma mai: il blocco nero "CONTA." continua a dondolare a caricamento finito
+  const blockRotate = useTransform(live, (t) => -1.5 + (instant ? 0 : Math.sin(t * 2.4) * 1.1));
+  const blockScale = useTransform(live, (t) => (instant ? 1 : 1 + Math.sin(t * 1.6 + 1) * 0.015));
   return (
     <div
       style={{
@@ -87,7 +92,7 @@ function Headline({ time, instant }: { time: Time; instant: boolean }) {
       </Word>
       <Word time={time} at={1.7} instant={instant}>
         <motion.span
-          style={{ display: "inline-block", padding: "0 12px 6px", background: INK, color: YELLOW, rotate: blockRotate }}
+          style={{ display: "inline-block", padding: "0 12px 6px", background: INK, color: YELLOW, rotate: blockRotate, scale: blockScale }}
         >
           CONTA.
         </motion.span>
@@ -97,10 +102,10 @@ function Headline({ time, instant }: { time: Time; instant: boolean }) {
 }
 
 // frase d'accento accanto a "CHE"
-function Phrase({ time, instant }: { time: Time; instant: boolean }) {
+function Phrase({ time, live, instant }: { time: Time; live: Time; instant: boolean }) {
   const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - 2.9) / 0.8)));
   const opacity = useTransform(time, (t) => p(t));
-  const y = useTransform(time, (t) => 14 * (1 - p(t)));
+  const y = useTransform([time, live], ([t, l]: number[]) => 14 * (1 - p(t)) + (instant ? 0 : Math.sin(l * 1.3) * 2.5));
   return (
     <motion.p
       style={{
@@ -131,11 +136,13 @@ type SignalsState = "loading" | "ok" | "error";
 
 function Counter({
   time,
+  live,
   total,
   state,
   windowText,
 }: {
   time: Time;
+  live: Time;
   total: Time;
   state: SignalsState;
   windowText: string;
@@ -146,6 +153,8 @@ function Counter({
   });
   const scale = useTransform(time, (t) => backOut(clamp01((t - 2.3) / 0.7)));
   // se i segnali superano 9999 il numero si rimpicciolisce per restare dentro l'adesivo
+  const wobble = useTransform(live, (l) => 4 + Math.sin(l * 1.9) * 1.8);
+  const bob = useTransform(live, (l) => Math.sin(l * 1.4 + 2) * 3);
   const numberSize = useTransform(total, (v) => (v >= 10000 ? 34 : 44));
   return (
     <motion.div
@@ -160,7 +169,8 @@ function Counter({
         background: INK,
         boxShadow: `4px 4px 0 ${ACCENT}`,
         color: CREAM,
-        rotate: 4,
+        rotate: wobble,
+        y: bob,
         scale,
         opacity: scale,
       }}
@@ -201,14 +211,14 @@ function Counter({
 }
 
 // ---------- nastro nero con i temi che scorre ----------
-function Tape({ time }: { time: Time }) {
+function Tape({ time, live }: { time: Time; live: Time }) {
   const group = useRef<HTMLDivElement>(null);
   // i settori AI (tutti, dallo stesso elenco della raccolta) in un ordine diverso a ogni apertura;
   // se ne mostrano 30, più che sufficienti per tutta la durata dell'intro
   const all = useOpeningCategories();
   const topics = useMemo(() => [...all].reverse().slice(0, 30), [all]);
   const enter = useTransform(time, (t) => -520 * (1 - easeOut(clamp01((t - 2.6) / 1.0))));
-  const scroll = useTransform(time, (t) => -((t * 55) % (group.current?.offsetWidth || 900)));
+  const scroll = useTransform(live, (t) => -((t * 55) % (group.current?.offsetWidth || 900)));
   return (
     <motion.div
       style={{
@@ -265,10 +275,11 @@ function Tape({ time }: { time: Time }) {
 }
 
 // ---------- adesivo "SI PARTE!" sul blocco CONTA. ----------
-function GoSticker({ time }: { time: Time }) {
+function GoSticker({ time, live }: { time: Time; live: Time }) {
   const p = (t: number) => backOut(clamp01((t - (BAR_SECONDS - 1.1)) / 0.45));
   const scale = useTransform(time, (t) => p(t));
-  const rotate = useTransform(time, (t) => -8 + 24 * (1 - p(t)));
+  const rotate = useTransform([time, live], ([t, l]: number[]) => -8 + 24 * (1 - p(t)) + Math.sin(l * 3) * 3);
+  const pop = useTransform([time, live], ([t, l]: number[]) => p(t) * (1 + Math.sin(l * 3 + 1) * 0.06));
   return (
     <motion.span
       style={{
@@ -287,7 +298,7 @@ function GoSticker({ time }: { time: Time }) {
         whiteSpace: "nowrap",
         x: "-50%",
         y: "-50%",
-        scale,
+        scale: pop,
         opacity: scale,
         rotate,
       }}
@@ -306,10 +317,10 @@ const STATUS = [
   { from: 1, text: "PRONTO" },
 ];
 
-function Bar({ time }: { time: Time }) {
+function Bar({ time, live }: { time: Time; live: Time }) {
   const progress = (t: number) => clamp01(t / BAR_SECONDS);
   const width = useTransform(time, (t) => `${progress(t) * 100}%`);
-  const stripes = useTransform(time, (t) => `${t * 40}px 0`);
+  const stripes = useTransform(live, (t) => `${t * 40}px 0`); // le strisce scorrono anche a barra piena
   const percent = useTransform(time, (t) => `${Math.round(progress(t) * 100)}%`);
   const status = useTransform(time, (t) => {
     const p = progress(t);
@@ -362,6 +373,102 @@ function Bar({ time }: { time: Time }) {
   );
 }
 
+// ---------- fine del caricamento: "Tocca per continuare" (nell'artboard, solo grafica) ----------
+function ContinueHint() {
+  return (
+    <motion.div
+      aria-hidden="true"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      style={{ position: "absolute", left: 24, top: 622, width: 342, display: "flex", justifyContent: "center" }}
+    >
+      <motion.span
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 9,
+          padding: "8px 16px",
+          background: INK,
+          color: YELLOW,
+          boxShadow: `4px 4px 0 ${GREEN}`,
+          fontFamily: MONO,
+          fontWeight: 700,
+          fontSize: 12,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+        }}
+      >
+        <i style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: GREEN }} />
+        Tocca per continuare
+      </motion.span>
+    </motion.div>
+  );
+}
+
+// ---------- pulsante "Imposta lingua" (per ora senza funzione: dice che le lingue arrivano dopo) ----------
+function LanguageButton({ note, onPress }: { note: boolean; onPress: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.1, ease: "easeOut" }}
+      style={{
+        position: "absolute",
+        left: 24,
+        top: 674,
+        width: 342,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 6,
+        pointerEvents: "none",
+      }}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onPress();
+        }}
+        style={{
+          pointerEvents: "auto",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          height: 40,
+          padding: "0 18px",
+          boxSizing: "border-box",
+          border: `3px solid ${INK}`,
+          background: CREAM,
+          boxShadow: `3px 3px 0 ${INK}`,
+          color: INK,
+          fontFamily: MONO,
+          fontWeight: 700,
+          fontSize: 11,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          cursor: "pointer",
+        }}
+      >
+        <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+          <circle cx="12" cy="12" r="9.5" />
+          <ellipse cx="12" cy="12" rx="4" ry="9.5" />
+          <path d="M2.5 12h19" />
+        </svg>
+        Imposta lingua
+      </button>
+      {note && (
+        <span role="status" style={{ fontFamily: MONO, fontWeight: 600, fontSize: 9, letterSpacing: "0.06em", color: INK }}>
+          IN ARRIVO · PER ORA SOLO ITALIANO
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
 // ---------- strappo: tre strisce colorate attraversano lo schermo ----------
 const STRIPE_COLORS = [INK, CREAM, ACCENT]; // dal fondo alla cima: l'ultima a restare è quella nera, come lo sfondo dello Splash
 
@@ -407,6 +514,7 @@ function usePrefersReducedMotion() {
 export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDone: () => void }) {
   const reduce = usePrefersReducedMotion();
   const time = useMotionValue(0);
+  const live = useMotionValue(0); // orologio libero: non si ferma mai (a differenza di time), guida i movimenti che continuano dopo il caricamento
   const total = useMotionValue(0); // numero vero di segnali raccolti (0 finché la risposta non arriva)
   const [signals, setSignals] = useState<SignalsState>("loading");
   const [windowText, setWindowText] = useState(""); // es. "negli ultimi 15 minuti"
@@ -415,6 +523,11 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const controlsRef = useRef<AnimationPlaybackControls | null>(null);
   const geometry = useRef({ w: ART_W, h: ART_H });
   const [scale, setScale] = useState(0); // 0 = non ancora misurato (resta nascosto)
+  const [ready, setReady] = useState(false); // barra al 100%: l'intro aspetta un tocco
+  const [go, setGo] = useState(false); // toccato: partono le strisce
+  const [langNote, setLangNote] = useState(false);
+  const releasedRef = useRef(false);
+  const readyRef = useRef(false);
 
   // l'artboard 390 x 844 si adatta allo schermo, come la schermata iniziale
   useEffect(() => {
@@ -450,6 +563,19 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     return () => request.abort();
   }, [total]);
 
+  // orologio libero: avanza sempre, anche quando time aspetta il tocco. Con "Riduci movimento" resta fermo.
+  useEffect(() => {
+    if (reduce) return;
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      live.set((now - start) / 1000);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [live, reduce]);
+
   const handleReveal = useEffectEvent(onReveal);
   const handleDone = useEffectEvent(onDone);
 
@@ -459,24 +585,38 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     const frozen = new URLSearchParams(window.location.search).get("intro-t");
     if (frozen !== null) {
       time.set(Number(frozen));
+      setReady(Number(frozen) >= BAR_SECONDS);
       return;
     }
     time.set(0);
+    releasedRef.current = false;
+    readyRef.current = false;
     let revealed = false;
-    // con le strisce lo Splash si monta quando tutto è coperto; con "Riduci movimento" subito, sotto la dissolvenza
-    const revealAt = reduce ? BAR_SECONDS : REVEAL_AT;
-    const stop = time.on("change", (t) => {
-      if (!revealed && t >= revealAt) {
-        revealed = true;
-        handleReveal();
-      }
-    });
+    // con le strisce lo Splash si monta quando tutto è coperto; con "Riduci movimento" subito dopo il tocco, sotto la dissolvenza
+    const revealAt = reduce ? BAR_SECONDS + 0.05 : REVEAL_AT;
     const controls = animate(time, TOTAL_SECONDS, {
       duration: TOTAL_SECONDS,
       ease: "linear",
       onComplete: () => handleDone(),
     });
-    controlsRef.current = controls; // serve solo alla barra di pausa in sviluppo
+    const stop = time.on("change", (t) => {
+      // barra al 100%: l'orologio si ferma finché non arriva il tocco
+      if (!releasedRef.current && t >= BAR_SECONDS) {
+        controls.pause();
+        controls.time = BAR_SECONDS;
+        time.set(BAR_SECONDS);
+        if (!readyRef.current) {
+          readyRef.current = true;
+          setReady(true);
+        }
+        return;
+      }
+      if (!revealed && t >= revealAt) {
+        revealed = true;
+        handleReveal();
+      }
+    });
+    controlsRef.current = controls; // serve alla barra di pausa in sviluppo e al tocco per continuare
     return () => {
       stop();
       controls.stop();
@@ -484,13 +624,24 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     };
   }, [time, reduce]);
 
+  // tocco dopo il caricamento: l'orologio riparte e le strisce strappano il poster
+  const proceed = () => {
+    if (!readyRef.current || releasedRef.current) return;
+    releasedRef.current = true;
+    setGo(true);
+    controlsRef.current?.play();
+  };
+
+  // "Imposta lingua": per ora solo un avviso (le lingue arrivano dopo)
+  const pressLanguage = () => {
+    setLangNote(true);
+    window.setTimeout(() => setLangNote(false), 2600);
+  };
+
   // il poster sparisce quando le strisce lo coprono del tutto (o si dissolve, con "Riduci movimento")
   const posterOpacity = useTransform(time, (t) =>
     reduce ? 1 - clamp01((t - BAR_SECONDS) / 0.4) : t < REVEAL_AT ? 1 : 0,
   );
-  // reticolo di puntini (mezzatinta) che scivola in diagonale
-  const dotX = useTransform(time, (t) => (t * 7) % 26);
-  const dotY = useTransform(time, (t) => (t * 14) % 52);
 
   return (
     <div
@@ -507,20 +658,24 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       }}
     >
       <motion.div style={{ position: "absolute", inset: 0, background: YELLOW, opacity: posterOpacity }}>
+        {/* sfondo di codice, lo stesso dello Splash ma inchiostro su giallo (stile in splash.css, ".intro-code") */}
         {!reduce && (
-          <motion.div
+          <div
             aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: -52,
-              opacity: 0.1,
-              backgroundImage:
-                "radial-gradient(circle at 25% 25%, #000 1.1px, transparent 1.5px), radial-gradient(circle at 75% 75%, #000 1.1px, transparent 1.5px)",
-              backgroundSize: "26px 52px",
-              x: dotX,
-              y: dotY,
-            }}
-          />
+            className="intro-code"
+            style={{ position: "absolute", inset: 0, containerType: "size" }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                // 1 unità Figma sullo schermo, come nello Splash
+                ["--u" as string]: "min(calc(100cqw / 390), calc(100cqh / 844))",
+              }}
+            >
+              <CodeRain />
+            </div>
+          </div>
         )}
 
         <div
@@ -537,18 +692,46 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
             visibility: scale > 0 ? "visible" : "hidden",
           }}
         >
-          <Headline time={time} instant={reduce} />
-          <Phrase time={time} instant={reduce} />
+          <Headline time={time} live={live} instant={reduce} />
+          <Phrase time={time} live={live} instant={reduce} />
           {!reduce && (
             <>
-              <Counter time={time} total={total} state={signals} windowText={windowText} />
-              <Tape time={time} />
-              <Tiles time={time} items={items} />
-              <GoSticker time={time} />
+              <Counter time={time} live={live} total={total} state={signals} windowText={windowText} />
+              <Tape time={time} live={live} />
+              <Tiles time={time} live={live} items={items} />
+              <GoSticker time={time} live={live} />
             </>
           )}
-          <Bar time={time} />
+          <Bar time={time} live={live} />
+          {ready && !go && <ContinueHint />}
         </div>
+
+        {/* a barra finita tutto lo schermo è un pulsante "Tocca per continuare"; "Imposta lingua" sta sopra, nel suo strato */}
+        {ready && !go && (
+          <>
+            <button
+              type="button"
+              aria-label="Tocca per continuare"
+              onClick={proceed}
+              style={{ position: "absolute", inset: 0, background: "transparent", border: 0, padding: 0, cursor: "pointer" }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: ART_W,
+                height: ART_H,
+                marginLeft: -ART_W / 2,
+                marginTop: -ART_H / 2,
+                transform: `scale(${scale})`,
+                pointerEvents: "none",
+              }}
+            >
+              <LanguageButton note={langNote} onPress={pressLanguage} />
+            </div>
+          </>
+        )}
       </motion.div>
 
       {!reduce && STRIPE_COLORS.map((_, i) => <Stripe key={i} time={time} i={i} geometry={geometry} />)}
