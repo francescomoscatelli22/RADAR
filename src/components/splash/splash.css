@@ -1,0 +1,953 @@
+/*
+  Schermata iniziale (design Figma "D · Zine · Schermata iniziale").
+  CSS normale (non "module"): in questo progetto la regola Tailwind di next.config.ts
+  tratta ogni file CSS come globale, quindi i nomi sono prefissati a mano
+  (classi "splash-…", animazioni "sp-…") per non scontrarsi con altro.
+
+  UNITÀ: tutto è disegnato in un "artboard" 390 x 844 come il frame Figma.
+  --u = quanto vale 1 unità Figma sullo schermo (si adatta a ogni telefono).
+  Quindi "calc(var(--u) * 24)" significa "24 come in Figma".
+
+  ANIMAZIONI: i keyframes descrivono il punto di PARTENZA (from) con fill-mode "backwards":
+  lo stato normale dell'elemento è quello finale, così con "Riduci movimento"
+  basta togliere le animazioni e la schermata resta completa e ferma.
+*/
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  height: 100dvh;
+  overflow: hidden;
+  container-type: size; /* serve alle unità cqw/cqh con cui calcoliamo --u */
+  color: var(--color-cream);
+  font-family: var(--font-bricolage), system-ui, sans-serif;
+}
+
+.splash-hole,
+.splash-content {
+  --u: min(calc(100cqw / 390), calc(100cqh / 844));
+}
+
+/* Raggio del foro che si apre in uscita (parte da un valore negativo: a riposo non si vede nemmeno un puntino) */
+@property --splash-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: -3px;
+}
+
+/*
+  Lo sfondo scuro è un gradiente a cerchio: trasparente dentro il raggio --splash-r, scuro fuori.
+  In uscita il raggio cresce e scopre la pagina sotto. Il centro coincide col centro del radar
+  (artboard centrato nello schermo: y = metà schermo + scarto dal centro dell'artboard).
+*/
+.splash-hole {
+  --splash-cy: calc(50% - var(--u) * 116); /* radar grande: centro a y=306 su 844 */
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% var(--splash-cy),
+    transparent var(--splash-r),
+    var(--color-bg) calc(var(--splash-r) + 2px)
+  );
+}
+
+.splash:not([data-stage="intro"]) .splash-hole {
+  --splash-cy: calc(50% - var(--u) * 160); /* radar piccolo: centro a y=262, a metà tra titolo e pulsanti */
+}
+
+.splash-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-art {
+  position: relative;
+  flex: none;
+  width: calc(var(--u) * 390);
+  height: calc(var(--u) * 844);
+}
+
+/* ---------- Uscita: il contenuto si dissolve, poi il foro circolare si allarga ---------- */
+.splash-leaving {
+  pointer-events: none;
+}
+
+.splash-leaving .splash-content {
+  animation: sp-content-out 0.3s ease-in forwards;
+}
+
+.splash-leaving .splash-hole {
+  animation: sp-reveal 0.75s 0.15s cubic-bezier(0.7, 0, 0.2, 1) forwards;
+}
+
+@keyframes sp-content-out {
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes sp-reveal {
+  to {
+    --splash-r: 120vmax;
+  }
+}
+
+/* ---------- Sfondo di codice (in movimento) ----------
+   Il contenitore (.splash-dotlayer) sta fermo e può avere una maschera; dentro, colonne di codice
+   che scorrono in verticale. Si muove solo con transform, che il telefono gestisce sulla scheda grafica. */
+.splash-dotlayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.splash-code {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center; /* le colonne stanno al centro: sul telefono se ne vedono 3 */
+  opacity: 0.1;
+  font-family: var(--font-martian), ui-monospace, monospace;
+  font-size: calc(var(--u) * 10);
+  white-space: pre;
+  color: var(--color-cream);
+}
+
+.splash-code-col {
+  flex: none;
+  width: calc(var(--u) * 300);
+  height: 100%;
+  overflow: hidden;
+  padding-left: calc(var(--u) * 14);
+  box-sizing: border-box;
+}
+
+/* le colonne esterne servono solo su schermi larghi (computer) */
+.splash-code-outer {
+  display: none;
+}
+
+@container (min-width: 900px) {
+  .splash-code-outer {
+    display: block;
+  }
+}
+
+.splash-code-track {
+  animation: sp-code-scroll 90s linear infinite;
+}
+
+.splash-code-track span {
+  display: block;
+  height: calc(var(--u) * 17);
+  line-height: calc(var(--u) * 17);
+}
+
+@keyframes sp-code-scroll {
+  to {
+    transform: translateY(-50%); /* esattamente una copia del testo */
+  }
+}
+
+/* strato luminoso: righe di importazione/definizione in giallo */
+.splash-code-bright {
+  opacity: 0.55;
+}
+
+.splash-code-bright .cc-k {
+  color: var(--color-accent);
+}
+
+.splash-code-bright .cc-c {
+  color: var(--color-card-article);
+}
+
+/* onda: un anello di puntini grandi che si allarga dal centro del radar ogni 4 secondi */
+@property --splash-wave {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.splash-dotlayer-wave {
+  --splash-wave: 0px;
+  --splash-wave-cy: calc(50% - var(--u) * 116); /* stesso centro del radar */
+  -webkit-mask-image: radial-gradient(
+    circle at 50% var(--splash-wave-cy),
+    transparent calc(var(--splash-wave) - var(--u) * 110),
+    #000 calc(var(--splash-wave) - var(--u) * 40),
+    transparent var(--splash-wave)
+  );
+  mask-image: radial-gradient(
+    circle at 50% var(--splash-wave-cy),
+    transparent calc(var(--splash-wave) - var(--u) * 110),
+    #000 calc(var(--splash-wave) - var(--u) * 40),
+    transparent var(--splash-wave)
+  );
+  animation: sp-wave 4s cubic-bezier(0.3, 0.2, 0.4, 1) 1.2s infinite;
+}
+
+.splash:not([data-stage="intro"]) .splash-dotlayer-wave {
+  --splash-wave-cy: calc(50% - var(--u) * 160);
+}
+
+@keyframes sp-wave {
+  from {
+    --splash-wave: 0px;
+  }
+  to {
+    --splash-wave: 820px;
+  }
+}
+
+/* Tutto lo schermo è toccabile nella fase iniziale */
+.splash-tap {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.splash-tap:focus-visible {
+  outline: 3px solid var(--color-card-article);
+  outline-offset: -8px;
+}
+
+/* ---------- Radar: nel menu si rimpicciolisce e sale (centro a y=306 → y=210) ---------- */
+.splash-cluster {
+  position: absolute;
+  inset: 0;
+  transform-origin: calc(var(--u) * 195) calc(var(--u) * 306);
+  transition: transform 0.7s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.splash:not([data-stage="intro"]) .splash-cluster {
+  transform: translateY(calc(var(--u) * -44)) scale(0.62);
+}
+
+.splash-radar {
+  position: absolute;
+  overflow: visible;
+}
+
+.splash-shadow {
+  animation: sp-fade-in 0.4s 0.3s ease-out backwards;
+}
+
+.splash-ring {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: sp-draw 0.55s cubic-bezier(0.5, 0, 0.2, 1) backwards;
+}
+
+@keyframes sp-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+.splash-sweep {
+  transform-origin: 150px 150px;
+  animation:
+    sp-fade-in 0.3s 0.2s ease-out backwards,
+    sp-spin 1.6s 0.3s linear infinite;
+}
+
+@keyframes sp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ogni puntino sta in un gruppo che ruota attorno al centro del radar (durata e verso inline) */
+.splash-orbit {
+  transform-origin: 150px 150px;
+  animation: sp-spin 10s linear infinite;
+}
+
+.splash-blip {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sp-pop 0.45s cubic-bezier(0.3, 1.7, 0.5, 1) backwards;
+}
+
+/* il puntino centrale non si sposta, ma pulsa */
+.splash-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    sp-pop 0.45s 0.3s cubic-bezier(0.3, 1.7, 0.5, 1) backwards,
+    sp-pulse 1.6s 0.9s ease-in-out infinite;
+}
+
+@keyframes sp-pulse {
+  50% {
+    transform: scale(1.22);
+  }
+}
+
+@keyframes sp-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+.splash-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: sp-ping 1.6s ease-out infinite;
+}
+
+@keyframes sp-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  55%,
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* ---------- Card in evidenza: una sola, grande, che cambia ogni 2 secondi ---------- */
+.splash-herozone {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+/* nel menu la card lascia il posto ai pulsanti */
+.splash:not([data-stage="intro"]) .splash-herozone {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.splash-card {
+  position: absolute;
+  box-sizing: border-box;
+  width: calc(var(--u) * 322);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 12);
+  border: calc(var(--u) * 3) solid var(--color-cream);
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-cream);
+  color: var(--color-card-ink);
+  transform: translate(-50%, -50%) rotate(var(--rot));
+  /* entra con un rimbalzo; --life = secondi di vita, gli ultimi 0,4 servono per uscire */
+  animation:
+    sp-card-in 0.55s var(--delay, 0s) cubic-bezier(0.3, 1.5, 0.5, 1) backwards,
+    sp-card-out 0.4s calc(var(--life, 3600s) - 0.4s) ease-in forwards;
+}
+
+@keyframes sp-card-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(calc(var(--rot) - 14deg)) scale(0.4);
+  }
+}
+
+@keyframes sp-card-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(calc(var(--rot) + 10deg)) scale(0.55);
+  }
+}
+
+/* Testi leggibili: etichette 10, titoli 19, testi 15-17 (prima 6,5 / 11 / 10) */
+.splash-card small {
+  display: block;
+  font-family: var(--font-martian), ui-monospace, monospace;
+  font-weight: 400;
+  font-size: calc(var(--u) * 10);
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+}
+
+.hc-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+}
+
+.hc-col {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 6);
+  min-width: 0;
+  flex: 1;
+}
+
+.hc-title {
+  display: block;
+  font-weight: 700;
+  font-size: calc(var(--u) * 19);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+/* video */
+.hc-thumb {
+  position: relative;
+  flex: none;
+  width: calc(var(--u) * 104);
+  height: calc(var(--u) * 104);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--color-thumb);
+  border: calc(var(--u) * 2.5) solid var(--color-card-ink);
+}
+
+.hc-thumb i {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: calc(var(--u) * 2.5) solid var(--color-card-ink);
+}
+
+.hc-sq {
+  left: calc(var(--u) * 8);
+  top: calc(var(--u) * 8);
+  width: calc(var(--u) * 20);
+  height: calc(var(--u) * 20);
+  background: var(--color-card-video);
+}
+
+.hc-sun {
+  left: calc(var(--u) * 62);
+  top: calc(var(--u) * -16);
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  border-radius: 50%;
+  background: var(--color-card-article);
+}
+
+.hc-thumb .hc-play {
+  left: calc(var(--u) * 32);
+  top: calc(var(--u) * 36);
+  width: calc(var(--u) * 36);
+  height: calc(var(--u) * 36);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent);
+  padding-left: calc(var(--u) * 3);
+}
+
+/* post */
+.hc-author {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+}
+
+.hc-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--u) * 42);
+  height: calc(var(--u) * 42);
+  box-sizing: border-box;
+  border: calc(var(--u) * 2.5) solid var(--color-card-ink);
+  border-radius: 50%;
+  background: var(--color-platform-post);
+  color: var(--color-cream);
+  font-style: normal;
+  font-weight: 700;
+  font-size: calc(var(--u) * 14);
+}
+
+.hc-name {
+  display: block;
+  font-weight: 700;
+  font-size: calc(var(--u) * 17);
+  line-height: 1;
+}
+
+.hc-body {
+  margin: 0;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: calc(var(--u) * 18);
+  line-height: 1.15;
+}
+
+/* articolo */
+.hc-headline {
+  display: block;
+  font-weight: 800;
+  font-size: calc(var(--u) * 22);
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+
+.hc-excerpt {
+  margin: 0;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: calc(var(--u) * 15);
+  line-height: 1.2;
+}
+
+/* thread */
+.hc-points {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+}
+
+.hc-points b {
+  font-weight: 800;
+  font-size: calc(var(--u) * 54);
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+}
+
+/* release: pannello nero con il registro delle modifiche */
+.hc-code {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 4);
+  padding: calc(var(--u) * 10) calc(var(--u) * 12);
+  background: #000;
+  color: var(--color-cream);
+  font-family: var(--font-martian), ui-monospace, monospace;
+}
+
+.hc-code b {
+  font-weight: 600;
+  font-size: calc(var(--u) * 24);
+  line-height: 1;
+}
+
+.hc-code span {
+  font-size: calc(var(--u) * 11);
+  line-height: 1.3;
+}
+
+/* podcast */
+.hc-playsq {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--u) * 52);
+  height: calc(var(--u) * 52);
+  box-sizing: border-box;
+  border: calc(var(--u) * 2.5) solid var(--color-card-ink);
+  background: var(--color-platform-video);
+}
+
+.hc-wave {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: calc(var(--u) * 28);
+}
+
+.hc-wave i {
+  display: block;
+  flex: none;
+  width: calc(var(--u) * 4);
+  background: var(--color-card-ink);
+}
+
+/* ---------- Adesivi, nastro adesivo, LIVE ---------- */
+.splash-sticker,
+.splash-live,
+.splash-tapepiece {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(var(--rot));
+  animation: sp-card-in 0.45s var(--delay, 0s) cubic-bezier(0.3, 1.7, 0.5, 1) backwards;
+}
+
+.splash-sticker {
+  box-sizing: border-box;
+  padding: calc(var(--u) * 2) calc(var(--u) * 9);
+  border: calc(var(--u) * 2.5) solid var(--color-card-ink);
+  color: var(--color-card-ink);
+  font-family: var(--font-permanent), cursive;
+  font-size: calc(var(--u) * 14);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.splash-sticker-new {
+  background: var(--color-card-article);
+}
+
+.splash-sticker-hot,
+.splash-sticker-first {
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+.splash-sticker-first {
+  --delay: 0.5s;
+  padding-inline: calc(var(--u) * 10);
+}
+
+.splash-tapepiece {
+  width: calc(var(--u) * 50);
+  height: calc(var(--u) * 15);
+  background: var(--color-card-article);
+  opacity: 0.85;
+}
+
+/* adesivi e nastro che stanno sulla card: la seguono (entrano e escono con lei) */
+.splash-card > .splash-card-sticker,
+.splash-card > .splash-card-tape {
+  transform: rotate(var(--rot));
+  animation: none;
+}
+
+.splash-card > .splash-card-sticker {
+  right: calc(var(--u) * -14);
+  top: calc(var(--u) * -16);
+  font-size: calc(var(--u) * 16);
+}
+
+.splash-card > .splash-card-tape {
+  --rot: 38deg;
+  right: calc(var(--u) * -18);
+  top: calc(var(--u) * -4);
+}
+
+.splash-live {
+  z-index: 2; /* sopra il blocco del titolo */
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  padding: calc(var(--u) * 5) calc(var(--u) * 12);
+  border: calc(var(--u) * 3) solid var(--color-cream);
+  background: var(--color-accent);
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-cream);
+  color: var(--color-card-ink);
+  font-family: var(--font-martian), ui-monospace, monospace;
+  font-weight: 700;
+  font-size: calc(var(--u) * 12);
+  line-height: 1;
+}
+
+.splash-live i {
+  display: block;
+  width: calc(var(--u) * 8);
+  height: calc(var(--u) * 8);
+  border-radius: 50%;
+  background: var(--color-card-ink);
+}
+
+/* ---------- Titolo: in alto, in Unbounded ---------- */
+.splash-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--u) * 62);
+  width: max-content;
+  margin-inline: auto; /* blocco centrato sull'artboard */
+  box-sizing: border-box;
+  display: flex;
+  overflow: hidden; /* le lettere salgono da sotto una "finestra" */
+  padding: calc(var(--u) * 7) calc(var(--u) * 18);
+  /* stesso stile del resto dell'app: blocco pieno, bordo spesso, ombra dura */
+  background: var(--color-card-article);
+  border: calc(var(--u) * 3) solid var(--color-cream);
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-cream);
+  color: var(--color-card-ink);
+  transform: rotate(-1.5deg);
+  font-family: var(--font-unbounded), var(--font-bricolage), system-ui, sans-serif;
+  font-weight: 900;
+  font-size: calc(var(--u) * 54);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.splash-title span {
+  display: inline-block;
+  animation: sp-rise 0.55s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+
+@keyframes sp-rise {
+  from {
+    transform: translateY(110%);
+  }
+}
+
+/* ---------- Frase che ruota ogni 3 secondi, ogni volta in un punto diverso ---------- */
+.splash-phrase {
+  position: absolute;
+  margin: 0;
+  padding: calc(var(--u) * 8) calc(var(--u) * 14);
+  border: calc(var(--u) * 3) solid var(--color-cream);
+  background: var(--bg);
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-cream);
+  color: var(--color-card-ink);
+  font-family: var(--font-instrument), Georgia, serif;
+  font-style: italic;
+  font-size: calc(var(--u) * 26);
+  line-height: 1;
+  transform: rotate(var(--rot));
+  animation: sp-phrase 3s linear both;
+}
+
+@keyframes sp-phrase {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--rot) + 8deg)) scale(0.55);
+  }
+  6% {
+    opacity: 1;
+    transform: rotate(var(--rot)) scale(1.07);
+  }
+  10%,
+  90% {
+    opacity: 1;
+    transform: rotate(var(--rot)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--rot)) scale(0.9);
+  }
+}
+
+/* ---------- Invito a toccare ---------- */
+.splash-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--u) * 680);
+  width: max-content;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 10) calc(var(--u) * 16);
+  border: calc(var(--u) * 2.5) solid var(--color-cream);
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-accent);
+  font-family: var(--font-martian), ui-monospace, monospace;
+  font-weight: 600;
+  font-size: calc(var(--u) * 11);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation:
+    sp-fade-up 0.5s 1.3s ease-out backwards,
+    sp-bob 1.8s 1.8s ease-in-out infinite;
+}
+
+.splash-hint i {
+  display: block;
+  width: calc(var(--u) * 9);
+  height: calc(var(--u) * 9);
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.splash:not([data-stage="intro"]) .splash-hint {
+  visibility: hidden;
+}
+
+@keyframes sp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--u) * 8));
+  }
+}
+
+@keyframes sp-bob {
+  50% {
+    transform: translateY(calc(var(--u) * -4));
+  }
+}
+
+/* ---------- Pulsanti (stile zine: bordo spesso, ombra dura) ---------- */
+.splash-actions {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.splash:not([data-stage="intro"]) .splash-actions {
+  visibility: visible;
+}
+
+.splash-btn {
+  --shadow: var(--color-cream);
+  position: absolute;
+  left: calc(var(--u) * 24);
+  width: calc(var(--u) * 342);
+  height: calc(var(--u) * 60);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 10);
+  border: calc(var(--u) * 3) solid var(--color-cream);
+  border-radius: 0;
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--shadow);
+  font-family: var(--font-bricolage), system-ui, sans-serif;
+  font-weight: 800;
+  font-size: calc(var(--u) * 19);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.splash-btn:active {
+  transform: translate(calc(var(--u) * 4), calc(var(--u) * 4));
+  box-shadow: 0 0 0 var(--shadow);
+}
+
+.splash-btn:focus-visible {
+  outline: 3px solid var(--color-card-article);
+  outline-offset: 4px;
+}
+
+.splash-btn-primary {
+  background: var(--color-card-article);
+  color: var(--color-card-ink);
+}
+
+.splash-btn-secondary {
+  --shadow: var(--color-card-article);
+  background: var(--color-surface);
+  color: var(--color-cream);
+}
+
+.splash-btn-google {
+  --shadow: var(--color-accent);
+  background: var(--color-cream);
+  color: var(--color-card-ink);
+}
+
+/* I pulsanti entrano uno dopo l'altro quando si passa alla fase "menu" */
+.splash:not([data-stage="intro"]) .splash-btn {
+  animation: sp-fade-up 0.45s var(--d, 0s) cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+
+.splash-note {
+  position: absolute;
+  left: calc(var(--u) * 24);
+  width: calc(var(--u) * 342);
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-martian), ui-monospace, monospace;
+  font-size: calc(var(--u) * 11);
+  letter-spacing: 0.06em;
+  color: var(--color-cream-2);
+}
+
+/* ---------- Nastri incrociati ---------- */
+.splash-tape {
+  position: absolute;
+  left: calc(var(--u) * -40);
+  top: calc(var(--u) * 768);
+  width: calc(var(--u) * 470);
+  height: calc(var(--u) * 28);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: var(--color-bg);
+  transform: rotate(var(--tr));
+  animation: sp-tape-in 0.5s 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+
+.splash-tape-a {
+  --tr: -3deg;
+  background: var(--color-cream);
+}
+
+.splash-tape-b {
+  --tr: 3.5deg;
+  background: var(--color-accent);
+}
+
+@keyframes sp-tape-in {
+  from {
+    transform: translateY(calc(var(--u) * 220)) rotate(var(--tr));
+  }
+}
+
+.splash-tape-track {
+  display: flex;
+  width: max-content;
+  animation: sp-marquee 28s linear infinite;
+}
+
+.splash-tape-b .splash-tape-track {
+  animation-direction: reverse;
+}
+
+.splash-tape-group {
+  display: flex;
+  flex: none;
+}
+
+.splash-tape-group span {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  padding-right: calc(var(--u) * 12);
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: calc(var(--u) * 12);
+  letter-spacing: 0.06em;
+}
+
+.splash-tape-group i {
+  display: block;
+  width: calc(var(--u) * 8);
+  height: calc(var(--u) * 8);
+  border-radius: 50%;
+}
+
+@keyframes sp-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes sp-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ---------- Riduci movimento: tutto fermo, uscita con semplice dissolvenza ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .splash *,
+  .splash *::before,
+  .splash *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .splash-leaving .splash-content,
+  .splash-leaving .splash-hole {
+    animation: sp-fade-out 0.3s ease-out forwards !important;
+  }
+}

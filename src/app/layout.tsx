@@ -1,15 +1,53 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import {
+  Bricolage_Grotesque,
+  Martian_Mono,
+  Instrument_Serif,
+  Permanent_Marker,
+  Newsreader,
+  Unbounded,
+} from "next/font/google";
+import AppBoot from "@/components/AppBoot";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Titoli e interfaccia ("opsz" = a corpo grande le lettere diventano più compatte, come in Figma)
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+  axes: ["opsz"],
+});
+
+// Titolo "RADAR": largo e geometrico
+const unbounded = Unbounded({
+  variable: "--font-unbounded",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Adesivi scritti a pennarello
+const permanent = Permanent_Marker({
+  variable: "--font-permanent",
   subsets: ["latin"],
+  weight: "400",
+});
+
+// Testi di lettura
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+});
+
+// Etichette tecniche
+const martian = Martian_Mono({
+  variable: "--font-martian",
+  subsets: ["latin"],
+});
+
+// Frasi di accento (solo corsivo)
+const instrument = Instrument_Serif({
+  variable: "--font-instrument",
+  subsets: ["latin"],
+  weight: "400",
+  style: "italic",
 });
 
 export const metadata: Metadata = {
@@ -24,13 +62,21 @@ export const metadata: Metadata = {
   },
 };
 
+// viewportFit "cover" serve a far funzionare i margini di sicurezza dell'iPhone (notch, barra in basso)
+export const viewport: Viewport = {
+  themeColor: "#141414",
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="it"
+      className={`${bricolage.variable} ${martian.variable} ${instrument.variable} ${permanent.variable} ${newsreader.variable} ${unbounded.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AppBoot>{children}</AppBoot>
+      </body>
     </html>
   );
 }

@@ -1,0 +1,47 @@
+/*
+  Token di design di Radar (stile D · Zine).
+  È l'unico posto dove vivono colori, font e misure: i componenti li usano per nome.
+  Le due serie di colori:
+   - "ink / paper / signal / coral": prese dall'icona (usate dalle pagine segnaposto)
+   - "bg / surface / cream / card-* / platform-*": variabili Figma, collezione "Zine", modo Scuro
+*/
+
+/* "static" = le variabili esistono sempre, anche se usate solo nei file CSS dei componenti */
+@theme static {
+  /* dall'icona */
+  --color-ink: #17150f;
+  --color-paper: #f6f1e7;
+  --color-signal: #ffd23f;
+  --color-coral: #f0674a;
+
+  /* Zine · Scuro (da Figma) */
+  --color-bg: #141414;
+  --color-surface: #1f1f1f;
+  --color-surface-2: #2a2a2a;
+  --color-cream: #fffdf5; /* testo, linee e ombre dure */
+  --color-cream-2: #bdbaab;
+  --color-accent: #ff6b5e;
+  --color-thumb: #c4b5fd;
+  --color-card-ink: #000000;
+  --color-card-ink-2: #2b2b2b;
+  --color-card-video: #ff7a6b;
+  --color-card-post: #8fb7ff;
+  --color-card-article: #ffd93d;
+  --color-card-thread: #ffb36b;
+  --color-card-code: #c4b5fd;
+  --color-card-audio: #7ee7a8;
+  --color-platform-video: #ff3b2f;
+  --color-platform-post: #2f6bff;
+
+  --border-zine: 3px;
+}
+
+/* I font arrivano da next/font (vedi layout.tsx) tramite queste variabili */
+@theme inline {
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-mono: var(--font-martian), ui-monospace, monospace;
+  --font-accent: var(--font-instrument), Georgia, serif;
+  --font-title: var(--font-unbounded), var(--font-bricolage), system-ui, sans-serif;
+  --font-marker: var(--font-permanent), "Comic Sans MS", cursive;
+  --font-reading: var(--font-newsreader), Georgia, serif;
+}
