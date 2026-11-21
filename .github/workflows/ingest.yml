@@ -1,14 +1,27 @@
 name: Raccolta contenuti
 
+# Radar vive di aggiornamenti continui. Il cron di GitHub da solo non basta: sui repository
+# nuovi o poco attivi salta molte esecuzioni (il 21/11 ne ha saltate per 7 ore di fila).
+# Quindi ogni esecuzione dura ~12 minuti, raccoglie ogni 3 minuti e alla fine lancia la
+# successiva da sola (catena). Il cron ogni 10 minuti è la rete di sicurezza se la catena si rompe.
 on:
   schedule:
-    - cron: "*/30 * * * *" # ogni 30 minuti (GitHub può ritardare di qualche minuto)
+    - cron: "*/10 * * * *"
   workflow_dispatch: # permette di lanciarla a mano dal sito GitHub
+
+# una sola raccolta alla volta; una seconda resta in attesa (non si cancella quella in corso)
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write # serve a rilanciare la prossima esecuzione
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,7 +29,21 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run ingest
+      - name: Raccolta ogni 3 minuti per ~12 minuti
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          fail=0
+          for i in 1 2 3 4; do
+            # un giro andato male non ferma i successivi
+            if ! npm run ingest; then fail=$((fail+1)); fi
+            [ "$i" -lt 4 ] && sleep 180
+          done
+          # fallisce (e si vede nel sito) solo se TUTTI i giri sono falliti
+          [ "$fail" -lt 4 ]
+      - name: Lancia la prossima esecuzione
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ingest.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"

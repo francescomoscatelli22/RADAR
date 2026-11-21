@@ -71,6 +71,13 @@ export default function FeedView({ topics, sources, format, enabled = true, empt
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasMore, loadMore } = feed;
 
+  // ogni minuto l'app si ridisegna, così "5 min" diventa "6 min" senza ricaricare
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => {
     const el = sentinel.current;
     if (!el || !hasMore) return;
@@ -108,6 +115,20 @@ export default function FeedView({ topics, sources, format, enabled = true, empt
 
   return (
     <div>
+      {/* segnali arrivati mentre l'app era aperta: un tocco e salgono in cima */}
+      {feed.freshCount > 0 && (
+        <div className="pointer-events-none sticky top-[calc(var(--safe-top)+8px)] z-30 -mt-1 mb-3 flex justify-center">
+          <button
+            type="button"
+            onClick={feed.showFresh}
+            className="pointer-events-auto flex items-center gap-2 border-[3px] border-cream bg-signal px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-ink shadow-zine"
+          >
+            <Icon name="radar" size={16} />
+            {feed.freshCount === 1 ? "1 nuovo segnale" : `${feed.freshCount} nuovi segnali`}
+          </button>
+        </div>
+      )}
+
       {/* indicatore di "tira per aggiornare" / aggiornamento in corso */}
       <div
         aria-hidden={pull === 0 && !feed.refreshing}

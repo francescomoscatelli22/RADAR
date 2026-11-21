@@ -102,7 +102,8 @@ export async function GET(request: Request) {
     .not("title", "like", "trunk/%")
     .not("title", "ilike", "%alpha%")
     .not("title", "ilike", "%nightly%")
-    .not("title", "match", "^b[0-9]+$")
+    .not("title", "like", "viable/%")
+    .not("title", "match", "^b[0-9]+")
     .limit(limit + 1); // uno in più: serve a sapere se c'è una pagina dopo
 
   if (topics.length) query = query.overlaps("topics", expandTopics(topics, await topicTree(db)));

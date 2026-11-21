@@ -64,6 +64,7 @@ export function useFeed(query: FeedQuery) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [token, setToken] = useState(0);
+  const [fresh, setFresh] = useState<FeedItem[]>([]);
   const busy = useRef(false);
   // sempre l'ultima richiesta, senza dover rifare gli effetti a ogni render
   const latest = useRef({ topics, sources, format, key });
@@ -105,6 +106,10 @@ export function useFeed(query: FeedQuery) {
   }, [key, enabled, token]);
 
   const view = data && data.key === key ? data : null;
+  const itemsRef = useRef<FeedItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = view?.items ?? [];
+  });
 
   const loadMore = useCallback(async () => {
     const cur = view;
@@ -128,11 +133,58 @@ export function useFeed(query: FeedQuery) {
   }, [view]);
 
   const refresh = useCallback(() => {
+    setFresh([]);
     setRefreshing(true);
     setToken((t) => t + 1);
   }, []);
 
+  // Segnali nuovi: ogni minuto (e quando si torna sull'app) si guarda la prima pagina.
+  // Quelli che non sono ancora nella lista restano da parte e compaiono con "N nuovi segnali".
+  const ready = view?.status === "ready";
+  useEffect(() => {
+    if (!enabled || !ready) return;
+    let stop = false;
+    const check = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const page = await fetchPage(latest.current, null);
+        if (stop) return;
+        const current = itemsRef.current;
+        const seen = new Set(current.map((i) => i.id));
+        // solo quelli più recenti del primo della lista
+        const top = current[0] ? new Date(current[0].publishedAt).getTime() : 0;
+        const news = page.items.filter((i) => !seen.has(i.id) && new Date(i.publishedAt).getTime() >= top);
+        setFresh((old) => (old.length === news.length && old.every((o, k) => o.id === news[k].id) ? old : news));
+      } catch {
+        /* niente rete: riprova al prossimo giro */
+      }
+    };
+    const id = window.setInterval(check, 60_000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [enabled, ready, key]);
+
+  /** Mette in cima i segnali nuovi arrivati nel frattempo. */
+  const showFresh = useCallback(() => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const seen = new Set(prev.items.map((i) => i.id));
+      const merged = [...fresh.filter((i) => !seen.has(i.id)), ...prev.items].sort(
+        (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+      );
+      return { ...prev, items: merged };
+    });
+    setFresh([]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [fresh]);
+
   return {
+    freshCount: fresh.length,
+    showFresh,
     items: view?.items ?? [],
     status: (view?.status ?? "loading") as Status,
     offline: view?.offline ?? false,
