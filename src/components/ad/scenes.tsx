@@ -130,7 +130,7 @@ function Scene1({ time }: { time: Time }) {
   );
 }
 
-/* ============ Scena 2 · arriva Radar (3.6 → 7.4 s) ============ */
+/* ============ Scena 2 · arriva RAIDAR (3.6 → 7.4 s) ============ */
 
 function Scene2({ time }: { time: Time }) {
   const t0 = T.S2 + 1.1;
@@ -156,7 +156,8 @@ function Scene2({ time }: { time: Time }) {
         <Letters
           time={time}
           at={t0 + 0.4}
-          text="RADAR"
+          text="RAIDAR"
+          colors={{ 1: C.signal, 2: C.signal }}
           style={{
             fontFamily: DISPLAY,
             fontWeight: 800,
@@ -388,7 +389,7 @@ function Phone({ time }: { time: Time }) {
               </div>
             </div>
             <div>
-              <div style={{ fontFamily: MONO, fontSize: 15, letterSpacing: "0.1em", color: C.signal }}>RADAR · ADESSO</div>
+              <div style={{ fontFamily: MONO, fontSize: 15, letterSpacing: "0.1em", color: C.signal }}>RAIDAR · ADESSO</div>
               <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 25, lineHeight: 1.1 }}>Nuovo modello 3D appena uscito</div>
             </div>
           </div>
@@ -623,7 +624,8 @@ function Scene5({ time }: { time: Time }) {
         <Letters
           time={time}
           at={t0 + 0.2}
-          text="RADAR"
+          text="RAIDAR"
+          colors={{ 1: C.signal, 2: C.signal }}
           style={{ justifyContent: "center", fontFamily: DISPLAY, fontWeight: 800, fontSize: 210, lineHeight: 1, letterSpacing: "-0.04em" }}
         />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { animate, motion, useMotionValue, useTransform, type AnimationPlaybackControls } from "motion/react";
 import DevPause from "./DevPause";
 import { windowLabel, type Signal, type SignalsResponse } from "@/lib/signals";
@@ -217,15 +217,15 @@ function Tape({ time, live }: { time: Time; live: Time }) {
   // se ne mostrano 30, più che sufficienti per tutta la durata dell'intro
   const all = useOpeningCategories();
   const topics = useMemo(() => [...all].reverse().slice(0, 30), [all]);
-  const enter = useTransform(time, (t) => -520 * (1 - easeOut(clamp01((t - 2.6) / 1.0))));
+  const enter = useTransform(time, (t) => -1000 * (1 - easeOut(clamp01((t - 2.6) / 1.0))));
   const scroll = useTransform(live, (t) => -((t * 55) % (group.current?.offsetWidth || 900)));
   return (
     <motion.div
       style={{
         position: "absolute",
-        left: -20,
+        left: -220, // 200 in più per lato: anche quando l'artboard è più stretto dello schermo il nastro arriva ai bordi
         top: 338,
-        width: 430,
+        width: 830,
         height: 28,
         display: "flex",
         alignItems: "center",
@@ -494,6 +494,15 @@ function LanguageButton({ note, onPress }: { note: boolean; onPress: () => void 
 // ---------- strappo: tre strisce colorate attraversano lo schermo ----------
 const STRIPE_COLORS = [INK, CREAM, ACCENT]; // dal fondo alla cima: l'ultima a restare è quella nera, come lo sfondo dello Splash
 
+// zona dello schermo senza le fasce di sistema dell'iPhone (in alto iOS 26 sfoca): qui sta tutto il disegno dell'intro
+const SAFE_ZONE: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  top: "var(--safe-top-clear)",
+  bottom: "var(--safe-bottom)",
+};
+
 function Stripe({ time, i, geometry }: { time: Time; i: number; geometry: Geometry }) {
   const x = useTransform(time, (t) => {
     const travel = geometry.current.w + 400;
@@ -543,6 +552,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const [windows, setWindows] = useState<{ seconds: number; count: number }[]>([]); // conteggi veri per finestra, in ordine misto
   const [items, setItems] = useState<Signal[]>([]); // gli ultimi contenuti veri, uno per formato (vuoto se il database non risponde)
   const rootRef = useRef<HTMLDivElement>(null);
+  const safeRef = useRef<HTMLDivElement>(null); // area senza le fasce di sistema dell'iPhone
   const controlsRef = useRef<AnimationPlaybackControls | null>(null);
   const geometry = useRef({ w: ART_W, h: ART_H });
   const [scale, setScale] = useState(0); // 0 = non ancora misurato (resta nascosto)
@@ -560,9 +570,12 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       const w = el.clientWidth;
       const h = el.clientHeight;
       geometry.current = { w, h };
-      setScale(Math.min(w / ART_W, h / ART_H));
+      // la grandezza dell'artboard si calcola sulla zona sicura, non su tutto lo schermo
+      const box = safeRef.current ?? el;
+      setScale(Math.min(box.clientWidth / ART_W, box.clientHeight / ART_H));
     });
     observer.observe(el);
+    if (safeRef.current) observer.observe(safeRef.current);
     return () => observer.disconnect();
   }, []);
 
@@ -682,12 +695,14 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     <div
       ref={rootRef}
       role="status"
-      aria-label="Caricamento di Radar"
+      aria-label="Caricamento di Raidar"
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 110,
-        height: "100dvh",
+        // "lvh" e non "dvh": aprendo l'app dalla Home, iOS per un attimo misura lo schermo più corto
+        // e sotto il giallo restava una striscia nera; lvh è sempre l'altezza piena
+        height: "100lvh",
         overflow: "hidden",
         fontFamily: DISPLAY,
       }}
@@ -713,6 +728,12 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
           </div>
         )}
 
+        {/* zona sicura: niente contenuto sotto l'ora/batteria e la barra in basso.
+            Su iOS 26 quella fascia in alto viene sfocata dal sistema. */}
+        <div
+          ref={safeRef}
+          style={SAFE_ZONE}
+        >
         <div
           aria-hidden="true"
           style={{
@@ -740,6 +761,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
           <Bar time={time} live={live} />
           {ready && !go && <ContinueHint />}
         </div>
+        </div>
 
         {/* a barra finita tutto lo schermo è un pulsante "Tocca per continuare"; "Imposta lingua" sta sopra, nel suo strato */}
         {ready && !go && (
@@ -750,20 +772,23 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
               onClick={proceed}
               style={{ position: "absolute", inset: 0, background: "transparent", border: 0, padding: 0, cursor: "pointer" }}
             />
-            <div
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                width: ART_W,
-                height: ART_H,
-                marginLeft: -ART_W / 2,
-                marginTop: -ART_H / 2,
-                transform: `scale(${scale})`,
-                pointerEvents: "none",
-              }}
-            >
-              <LanguageButton note={langNote} onPress={pressLanguage} />
+            {/* stessa zona sicura dell'artboard: altrimenti il pulsante finisce più in basso e si sovrappone */}
+            <div style={{ ...SAFE_ZONE, pointerEvents: "none" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  width: ART_W,
+                  height: ART_H,
+                  marginLeft: -ART_W / 2,
+                  marginTop: -ART_H / 2,
+                  transform: `scale(${scale})`,
+                  pointerEvents: "none",
+                }}
+              >
+                <LanguageButton note={langNote} onPress={pressLanguage} />
+              </div>
             </div>
           </>
         )}

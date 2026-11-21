@@ -1,7 +1,7 @@
 import Following from "@/components/follow/Following";
 import PageTransition from "@/components/nav/PageTransition";
 
-export const metadata = { title: "Seguiti · Radar" };
+export const metadata = { title: "Seguiti · Raidar" };
 
 export default function Seguiti() {
   return (

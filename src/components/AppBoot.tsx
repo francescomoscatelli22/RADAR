@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { PROVIDER_NAME, signInWithProvider, signOut, useAuth, type OAuthProvider } from "@/lib/auth";
@@ -15,6 +15,7 @@ const Splash = dynamic(() => import("./splash/Splash"));
 type Phase = Stage | "gone";
 // caricamento animato: "loading" (8,5 s con la barra) → "revealing" (le strisce scoprono la schermata iniziale) → "done"
 type Boot = "loading" | "revealing" | "done";
+const AUTH_PAGES = ["/accedi", "/registrati"];
 
 /**
  * Apertura di Radar. Si vede solo aprendo l'app dalla home ("/").
@@ -42,6 +43,39 @@ export default function AppBoot({ children }: { children: ReactNode }) {
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).has("splash");
   const returning = !forceSplash && (topics !== null || user !== null);
+
+  // Tornando su "/" da un'altra pagina (es. "Indietro" da Accedi, o il gesto indietro di iPhone)
+  // chi non ha ancora un account ritrova subito i pulsanti di accesso, senza rivedere caricamento e "Tocca per iniziare".
+  // (Si confronta la pagina precedente durante il disegno, come consiglia React, invece che in un effetto.)
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    if (pathname === "/" && !returning) setPhase("menu");
+  }
+
+  // Gesto indietro (iPhone) o tasto indietro del browser da Accedi/Registrati: la pagina precedente nella cronologia
+  // è quella che stava sotto la schermata iniziale (spesso "/argomenti"), quindi rimettiamo sopra i pulsanti di accesso.
+  // Next.js a volte cambia pagina prima che arrivi l'evento "indietro" (popstate), a volte dopo:
+  // per questo ricordiamo le ultime due pagine e capiamo da sole da dove si arriva.
+  const pages = useRef({ prev: pathname, curr: pathname, returning });
+  useEffect(() => {
+    const p = pages.current;
+    if (p.curr !== pathname) {
+      p.prev = p.curr;
+      p.curr = pathname;
+    }
+    p.returning = returning;
+  }, [pathname, returning]);
+  useEffect(() => {
+    const onPop = () => {
+      const p = pages.current;
+      const to = window.location.pathname;
+      const from = p.curr === to ? p.prev : p.curr;
+      if (AUTH_PAGES.includes(from) && !AUTH_PAGES.includes(to) && !p.returning) setPhase("menu");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   // Solo in sviluppo: dentro la cornice del telefono (design/phone-preview.html) nasconde la barra di scorrimento del computer
   useEffect(() => {

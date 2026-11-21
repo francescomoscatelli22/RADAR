@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Radar",
-    short_name: "Radar",
+    name: "Raidar",
+    short_name: "Raidar",
     description: "Il radar personale che capta le novità sull'intelligenza artificiale.",
     lang: "it",
     dir: "ltr",

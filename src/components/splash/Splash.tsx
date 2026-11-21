@@ -51,11 +51,11 @@ const TRAIL = [0.22, 0.16, 0.1, 0.05].map((opacity, k) => {
   return { opacity, d: `M${C} ${C} L${point(from)} A${R} ${R} 0 0 1 ${point(to)} Z` };
 });
 
-const stickerStyle = (cx: number, cy: number, rot: number, delay: number): CSSProperties =>
-  ({ left: u(cx), top: u(cy), "--rot": `${rot}deg`, "--delay": `${delay.toFixed(2)}s` }) as CSSProperties;
 
 // ---------- titolo ----------
-const WORD = "RADAR".split("");
+// RAIDAR = RADAR + AI: le lettere "AI" (posizioni 1 e 2) hanno un colore diverso
+const WORD = "RAIDAR".split("");
+const AI_LETTERS = new Set([1, 2]);
 
 // ---------- frasi che ruotano ogni 3 secondi, ognuna in un punto diverso ----------
 const PHRASES = [
@@ -223,7 +223,7 @@ export default function Splash({
       className={`splash ${stage === "leaving" ? "splash-leaving" : ""}`}
       data-stage={stage}
       role="region"
-      aria-label="Benvenuto in Radar"
+      aria-label="Benvenuto in Raidar"
       onAnimationEnd={handleEnd}
     >
       <div className="splash-hole" />
@@ -360,17 +360,24 @@ export default function Splash({
           {/* ---------- una sola card in evidenza, che cambia ogni 3,5 secondi ---------- */}
           <SignalCard onShow={tintBlip} />
 
-          <span className="splash-live" style={stickerStyle(344, 66, -5, 0.5)}>
-            <i /> LIVE
-          </span>
-
-          {/* ---------- titolo ---------- */}
-          <div className="splash-title" aria-hidden="true">
-            {WORD.map((ch, i) => (
-              <span key={i} style={{ animationDelay: `${0.8 + i * 0.07}s, ${2.6 + i * 0.12}s` }}>
-                {ch}
-              </span>
-            ))}
+          {/* ---------- titolo, con l'adesivo LIVE attaccato sopra ----------
+              LIVE sta DENTRO il blocco che oscilla: si muove con lui e Safari li disegna insieme.
+              Quando era un elemento separato sopra il blocco in movimento, su iPhone usciva sfocato. */}
+          <div className="splash-titlewrap">
+            <div className="splash-title" aria-hidden="true">
+              {WORD.map((ch, i) => (
+                <span
+                  key={i}
+                  className={AI_LETTERS.has(i) ? "splash-title-ai" : undefined}
+                  style={{ animationDelay: `${0.8 + i * 0.07}s, ${2.6 + i * 0.12}s` }}
+                >
+                  {ch}
+                </span>
+              ))}
+            </div>
+            <span className="splash-live" style={{ "--rot": "-3.5deg", "--delay": "0.50s" } as CSSProperties}>
+              <i /> LIVE
+            </span>
           </div>
 
           {/* ---------- frase che ruota (spenta per ora: vedi SHOW_PHRASES) ---------- */}

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import Icon from "@/components/ui/Icon";
+import Wordmark from "@/components/ui/Wordmark";
 
 /*
-  Testata fissa: titolo RADAR con il puntino "live" e il collegamento al profilo.
+  Testata fissa: logo RAIDAR con il puntino "live" e il collegamento al profilo.
   Altezza fissa 56 px (+ margine di sicurezza dell'iPhone): le barre dei filtri si appoggiano sotto.
 */
 export default function AppHeader() {
@@ -12,12 +13,12 @@ export default function AppHeader() {
       style={{ paddingTop: "var(--safe-top)", viewTransitionName: "app-header" }}
     >
       <div className="mx-auto flex h-14 max-w-[640px] items-center justify-between px-4">
-        <Link href="/" aria-label="Radar, vai a Per te" className="flex items-center gap-2.5">
+        <Link href="/" aria-label="Raidar, vai a Per te" className="flex items-center gap-2.5">
           <span className="relative grid size-3 place-items-center" aria-hidden="true">
             <span className="absolute size-3 animate-ping rounded-full bg-accent opacity-60 motion-reduce:hidden" />
             <span className="size-2.5 rounded-full bg-accent" />
           </span>
-          <span className="font-title text-lg font-black tracking-tight">RADAR</span>
+          <Wordmark className="text-lg" />
         </Link>
         <Link
           href="/profilo"

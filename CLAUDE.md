@@ -18,6 +18,7 @@ Leggi anche `AGENTS.md` (regole generate da Next.js: la versione di Next è rece
 | Tema | Scelta |
 |---|---|
 | App | PWA installabile (iPhone 17, iOS 26 + computer). Niente app nativa per ora (servirebbe un Mac + Apple Developer Program a pagamento). |
+| Nome (21/11/2026) | **RAIDAR** = RADAR + AI. Logo con "AI" colorato (variante A): giallo segnale su fondo scuro, corallo su fondo chiaro/giallo. Componente `src/components/ui/Wordmark.tsx` (testate), lettere colorate nello splash (`.splash-title-ai`) e nella pubblicità (`colors` di `Letters`). Nei testi semplici "Raidar". I nomi interni (`useRadar`, localStorage `radar:v1`, repo, progetto Supabase) restano "radar": cambiarli cancellerebbe i dati salvati. |
 | Framework | Next.js (App Router) + TypeScript, npm |
 | Stile | Tailwind CSS v4, token di design in un solo file (`src/design/tokens.css`) |
 | Hosting | Vercel Hobby (gratis, HTTPS). Termini "non commerciale": da rileggere se diventa prodotto. |

@@ -8,6 +8,7 @@ import { radar, useRadar } from "@/lib/store";
 import Button from "@/components/ui/Button";
 import Chip from "@/components/ui/Chip";
 import Icon from "@/components/ui/Icon";
+import Wordmark from "@/components/ui/Wordmark";
 
 /*
   Scelta degli argomenti (chip). Serve sia alla prima volta (dopo la registrazione) sia per cambiarli.
@@ -123,7 +124,7 @@ export default function TopicPicker() {
               <Icon name="back" size={20} /> Indietro
             </Link>
           ) : (
-            <span className="font-title text-lg font-black tracking-tight">RADAR</span>
+            <Wordmark className="text-lg" />
           )}
           <span className="font-mono text-xs font-bold uppercase tracking-wide text-cream-2">{editing ? "Argomenti" : "Passo 1 di 1"}</span>
         </div>

@@ -26,7 +26,8 @@
 
 .splash-hole,
 .splash-content {
-  --u: min(calc(100cqw / 390), calc(100cqh / 844));
+  /* l'artboard sta nella zona sicura: fuori dalla fascia dell'ora/batteria (che iOS 26 sfoca) e dalla barra in basso */
+  --u: min(calc(100cqw / 390), calc((100cqh - var(--safe-top-clear) - var(--safe-bottom)) / 844));
 }
 
 /* Raggio del foro che si apre in uscita (parte da un valore negativo: a riposo non si vede nemmeno un puntino) */
@@ -42,7 +43,7 @@
   (artboard centrato nello schermo: y = metà schermo + scarto dal centro dell'artboard).
 */
 .splash-hole {
-  --splash-cy: calc(50% - var(--u) * 116); /* radar grande: centro a y=306 su 844 */
+  --splash-cy: calc(50% + (var(--safe-top-clear) - var(--safe-bottom)) / 2 - var(--u) * 116); /* radar grande: centro a y=306 su 844 */
   position: absolute;
   inset: 0;
   background: radial-gradient(
@@ -53,12 +54,12 @@
 }
 
 .splash:not([data-stage="intro"]) .splash-hole {
-  --splash-cy: calc(50% - var(--u) * 160); /* radar piccolo: centro a y=262, a metà tra titolo e pulsanti */
+  --splash-cy: calc(50% + (var(--safe-top-clear) - var(--safe-bottom)) / 2 - var(--u) * 160); /* radar piccolo: centro a y=262, a metà tra titolo e pulsanti */
 }
 
 .splash-content {
   position: absolute;
-  inset: 0;
+  inset: var(--safe-top-clear) 0 var(--safe-bottom);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -650,6 +651,17 @@
   font-weight: 700;
   font-size: calc(var(--u) * 12);
   line-height: 1;
+  /* Entra SENZA rimpicciolirsi. Motivo: LIVE sta sopra il blocco RADAR, che si muove sempre.
+     Safari allora lo tiene come "foto" a parte, scattata quando era al 40% della grandezza,
+     e poi la ingrandisce: su iPhone usciva sfocato. Così la foto è a grandezza piena. */
+  animation-name: sp-live-in;
+}
+
+@keyframes sp-live-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - var(--u) * 16)) rotate(calc(var(--rot) - 14deg));
+  }
 }
 
 .splash-live i {
@@ -661,13 +673,25 @@
 }
 
 /* ---------- Titolo: in alto, in Unbounded ---------- */
-.splash-title {
+/* il contenitore porta posizione e oscillazione; dentro: il blocco RADAR e l'adesivo LIVE */
+.splash-titlewrap {
   position: absolute;
   left: 0;
   right: 0;
   top: calc(var(--u) * 62);
   width: max-content;
   margin-inline: auto; /* blocco centrato sull'artboard */
+  transform: rotate(-1.5deg);
+}
+
+/* LIVE sull'angolo in alto a destra del blocco (la rotazione si somma a quella del blocco) */
+.splash-titlewrap > .splash-live {
+  left: calc(100% + var(--u) * 4);
+  top: calc(var(--u) * 4);
+}
+
+.splash-title {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   overflow: hidden; /* le lettere salgono da sotto una "finestra" */
@@ -677,7 +701,6 @@
   border: calc(var(--u) * 3) solid var(--color-cream);
   box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-cream);
   color: var(--color-card-ink);
-  transform: rotate(-1.5deg);
   font-family: var(--font-unbounded), var(--font-bricolage), system-ui, sans-serif;
   font-weight: 900;
   font-size: calc(var(--u) * 54);
@@ -686,7 +709,7 @@
 }
 
 /* il blocco "respira": oscilla piano e ogni tanto lo attraversa un lampo di luce */
-.splash-title {
+.splash-titlewrap {
   animation: sp-title-sway 4.2s 1.6s ease-in-out infinite alternate;
 }
 
@@ -720,6 +743,11 @@
   100% {
     transform: translateX(420%) skewX(-18deg);
   }
+}
+
+/* "AI" di RAIDAR: corallo, perché il blocco del titolo è giallo */
+.splash-title .splash-title-ai {
+  color: var(--color-coral);
 }
 
 /* le lettere salgono una alla volta; poi, a onda, ognuna fa un saltello e un piccolo inchino, a ripetizione */

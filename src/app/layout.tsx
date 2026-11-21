@@ -55,10 +55,10 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Radar",
+  title: "Raidar",
   description: "Il radar personale che capta le novità sull'intelligenza artificiale.",
   // su iPhone, aggiunta alla Home: si apre a schermo intero con la barra di stato trasparente
-  appleWebApp: { capable: true, title: "Radar", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Raidar", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
   icons: {
     icon: [

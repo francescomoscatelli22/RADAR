@@ -62,7 +62,7 @@ export default function ForYou() {
           <div className="border-[3px] border-cream bg-surface p-6 text-center shadow-zine">
             <Icon name="radar" size={40} className="mx-auto mb-3 text-signal" />
             <h2 className="font-display text-2xl font-extrabold">
-              {format === "all" ? "Radar è in ascolto" : `Nessun ${FORMAT_LABEL[format].toLowerCase()} per ora`}
+              {format === "all" ? "Raidar è in ascolto" : `Nessun ${FORMAT_LABEL[format].toLowerCase()} per ora`}
             </h2>
             <p className="mx-auto mt-2 max-w-[30ch] font-accent text-xl italic text-cream-2">
               {format === "all"

@@ -152,7 +152,7 @@ export default function FeedView({ topics, sources, format, enabled = true, empt
         <Icon name="wifiOff" size={36} className="mx-auto mb-3 text-accent" />
         <h2 className="font-display text-2xl font-extrabold">Segnale perso</h2>
         <p className="mx-auto mt-2 max-w-[28ch] font-accent text-xl italic text-cream-2">
-          Non riesco a raggiungere Radar. Controlla la connessione.
+          Non riesco a raggiungere Raidar. Controlla la connessione.
         </p>
         <Button className="mt-5" onClick={feed.refresh}>
           <Icon name="refresh" size={18} /> Riprova

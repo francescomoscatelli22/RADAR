@@ -89,9 +89,9 @@ export default function Profile() {
       </Section>
 
       {!standalone && (
-        <Section title="Installa Radar">
+        <Section title="Installa Raidar">
           <p className="text-[15px] leading-snug text-cream-2">
-            Su iPhone: apri Radar in <strong className="text-cream">Safari</strong>, tocca{" "}
+            Su iPhone: apri Raidar in <strong className="text-cream">Safari</strong>, tocca{" "}
             <Icon name="share" size={16} className="inline -translate-y-px" /> <strong className="text-cream">Condividi</strong> e poi{" "}
             <strong className="text-cream">Aggiungi alla schermata Home</strong>. Si apre a schermo intero, come un&apos;app.
           </p>
@@ -125,7 +125,7 @@ export default function Profile() {
       </Section>
 
       <p className="mt-8 text-center font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-cream-2">
-        Radar · titoli e link, il resto sui siti originali
+        Raidar · titoli e link, il resto sui siti originali
       </p>
     </>
   );

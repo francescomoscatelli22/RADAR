@@ -49,6 +49,9 @@
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* iOS 26 sfoca la fascia dell'ora/batteria e un po' sotto: per le schermate a tutto schermo
+     (intro e splash) si lascia libero anche un margine in più (24px, solo sui telefoni con la fascia) */
+  --safe-top-clear: calc(var(--safe-top) + min(var(--safe-top), 24px));
   --nav-h: 64px; /* altezza della barra in basso, senza il margine di sicurezza */
 }
 

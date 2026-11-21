@@ -166,12 +166,15 @@ export function Letters({
   text,
   stagger = 0.07,
   style,
+  colors,
 }: {
   time: Time;
   at: number;
   text: string;
   stagger?: number;
   style?: CSSProperties;
+  /** colore di alcune lettere, per posizione (es. { 1: giallo, 2: giallo } per l'"AI" di RAIDAR) */
+  colors?: Record<number, string>;
 }) {
   return (
     <div style={{ display: "flex", ...style }}>
@@ -182,7 +185,7 @@ export function Letters({
           at={at + i * stagger}
           dur={0.55}
           from={{ y: 120, rotate: i % 2 ? 9 : -9 }}
-          style={{ display: "inline-block", whiteSpace: "pre" }}
+          style={{ display: "inline-block", whiteSpace: "pre", color: colors?.[i] }}
         >
           {ch}
         </Appear>
