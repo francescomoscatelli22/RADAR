@@ -249,10 +249,11 @@ Il giudizio è mio e discutibile: se una fonte non ti convince, si toglie con un
 | AI Search | video | AI |
 | Wes Roth | video | AI |
 
-## Podcast (10)
+## Podcast (11)
 
 | Fonte | Tipo | Argomenti |
 |---|---|---|
+| Latent Space | podcast | AI |
 | Lex Fridman Podcast | podcast | tutti i settori trovati con le parole chiave |
 | Hard Fork (NYT) | podcast | tutti i settori trovati con le parole chiave |
 | Practical AI | podcast | AI |

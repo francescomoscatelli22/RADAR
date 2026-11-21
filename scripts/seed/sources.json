@@ -182,6 +182,7 @@
   {"platform":"youtube","name":"Olivio Sarikas","url":"https://www.youtube.com/feeds/videos.xml?channel_id=UCbmNph6atAoGfqLoCL_duAg","topics":["ai-generativa","ai-immagini"],"match_keywords":false},
   {"platform":"youtube","name":"AI Search","url":"https://www.youtube.com/feeds/videos.xml?channel_id=UCIgnGlGkVRhd4qNFcEwLL4A","topics":["ai"],"match_keywords":true},
   {"platform":"youtube","name":"Wes Roth","url":"https://www.youtube.com/feeds/videos.xml?channel_id=UCqcbQf6yw5KzRoDDcZ_wBSw","topics":["ai"],"match_keywords":true},
+  {"platform":"podcast","name":"Latent Space","url":"https://www.latent.space/feed","topics":["ai"],"match_keywords":true},
   {"platform":"podcast","name":"Lex Fridman Podcast","url":"https://lexfridman.com/feed/podcast/","topics":[],"match_keywords":true},
   {"platform":"podcast","name":"Hard Fork (NYT)","url":"https://feeds.simplecast.com/l2i9YnTd","topics":[],"match_keywords":true},
   {"platform":"podcast","name":"Practical AI","url":"https://changelog.com/practicalai/feed","topics":["ai"],"match_keywords":true},
