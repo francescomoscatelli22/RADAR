@@ -159,7 +159,7 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
         {!isVideo && item.image && (
           <Thumb
             src={item.image}
-            className={`size-[76px] shrink-0 border-[3px] border-card-ink bg-card-ink object-cover ${isPodcast ? "" : "self-start"}`}
+            className={`size-[76px] shrink-0 border-[3px] border-card-ink bg-card-ink/15 object-cover ${isPodcast ? "" : "self-start"}`}
           />
         )}
       </div>
