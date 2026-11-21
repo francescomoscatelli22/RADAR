@@ -28,10 +28,14 @@ function set(next: Partial<AuthState>) {
 function start() {
   if (started) return;
   started = true;
-  const db = supabaseBrowser();
-  if (!db) return;
-  db.auth.getSession().then(({ data }) => set({ loading: false, user: data.session?.user ?? null }));
-  db.auth.onAuthStateChange((_event, session) => set({ loading: false, user: session?.user ?? null }));
+  const pending = supabaseBrowser();
+  if (!pending) return;
+  pending
+    .then((db) => {
+      db.auth.getSession().then(({ data }) => set({ loading: false, user: data.session?.user ?? null }));
+      db.auth.onAuthStateChange((_event, session) => set({ loading: false, user: session?.user ?? null }));
+    })
+    .catch(() => set({ loading: false })); // libreria non scaricata (offline): si continua senza account
 }
 
 function subscribe(cb: () => void) {
@@ -66,7 +70,7 @@ export const PROVIDER_NAME: Record<OAuthProvider, string> = { google: "Google", 
 
 /** Accesso con un'app esterna: il browser va dal provider e poi torna a Radar già con l'account. */
 export async function signInWithProvider(provider: OAuthProvider) {
-  const db = supabaseBrowser();
+  const db = await supabaseBrowser();
   if (!db) return { ok: false as const, reason: "not-configured" as const };
   const { error } = await db.auth.signInWithOAuth({
     provider,
@@ -79,5 +83,5 @@ export const signInWithGoogle = () => signInWithProvider("google");
 export const signInWithGitHub = () => signInWithProvider("github");
 
 export async function signOut() {
-  await supabaseBrowser()?.auth.signOut();
+  await (await supabaseBrowser())?.auth.signOut();
 }

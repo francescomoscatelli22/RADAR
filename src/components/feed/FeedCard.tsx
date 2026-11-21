@@ -1,8 +1,10 @@
 "use client";
 
 import { memo, useState } from "react";
-import { PLATFORM_FORMAT, prettyDuration, timeAgo, type FeedItem } from "@/lib/feed";
-import { radar, useRadar } from "@/lib/store";
+import { PLATFORM_FORMAT, prettyDuration, thumbUrl, timeAgo, type FeedItem } from "@/lib/feed";
+import { radar, useIsFollowing, useIsSaved } from "@/lib/store";
+import { useNow } from "@/lib/clock";
+import { toast } from "@/lib/toast";
 import Icon, { type IconName } from "@/components/ui/Icon";
 
 /*
@@ -20,20 +22,38 @@ const FORMAT_STYLE = {
   release: { label: "Release", icon: "package", bg: "bg-card-code" },
 } as const satisfies Record<string, { label: string; icon: IconName; bg: string }>;
 
-function Thumb({ src, className }: { src: string; className: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
+/**
+ * Miniatura in tre tentativi: versione leggera (wsrv.nl) → immagine originale → niente.
+ * Così se il servizio di ridimensionamento non risponde, l'immagine si vede lo stesso.
+ */
+function Thumb({ src, width, height, className }: { src: string; width: number; height?: number; className: string }) {
+  const [step, setStep] = useState(0);
+  const light = thumbUrl(src, width, height);
+  const url = step === 0 ? light : step === 1 && light !== src ? src : null;
+  if (!url) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- immagini di siti esterni sconosciuti: non si possono elencare per next/image
     <img
-      src={src}
+      src={url}
       alt=""
+      width={width}
+      height={height}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
+      onError={() => setStep((s) => (s === 0 && light !== src ? 1 : 2))}
       className={className}
     />
+  );
+}
+
+/** "5 min": si aggiorna da sola ogni minuto, senza ridisegnare la card. */
+function TimeAgo({ iso }: { iso: string }) {
+  const now = useNow();
+  return (
+    <time dateTime={iso} title={new Date(iso).toLocaleString("it-IT")}>
+      {timeAgo(iso, now)}
+    </time>
   );
 }
 
@@ -62,11 +82,10 @@ function ActionButton({
 }
 
 function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
-  const { saved, follows } = useRadar();
+  const isSaved = useIsSaved(item.id);
+  const following = useIsFollowing(item.source.id);
   const [copied, setCopied] = useState(false);
   const fmt = FORMAT_STYLE[PLATFORM_FORMAT[item.platform]];
-  const isSaved = saved.some((s) => s.id === item.id);
-  const following = follows.some((f) => f.ids.includes(item.source.id));
 
   const share = async () => {
     try {
@@ -76,13 +95,26 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
       }
       await navigator.clipboard.writeText(item.url);
       setCopied(true);
+      toast("Link copiato");
       setTimeout(() => setCopied(false), 1600);
     } catch {
       /* l'utente ha chiuso il foglio di condivisione: niente da fare */
     }
   };
 
-  const toggleFollow = () => radar.toggleFollow({ ids: [item.source.id], name: item.source.name, platform: item.platform });
+  // ogni azione si può annullare subito dalla notifica in basso (utile se il tocco era sbagliato)
+  const toggleSaved = () => {
+    const at = radar.get().saved.findIndex((s) => s.id === item.id);
+    radar.toggleSaved(item);
+    if (at === -1) toast("Salvato: lo trovi in Salvati", { label: "Annulla", run: () => radar.toggleSaved(item) });
+    else toast("Tolto dai salvati", { label: "Annulla", run: () => radar.restoreSaved(item, at) });
+  };
+
+  const toggleFollow = () => {
+    const f = { ids: [item.source.id], name: item.source.name, platform: item.platform };
+    radar.toggleFollow(f);
+    toast(following ? `Non segui più ${f.name}` : `Ora segui ${f.name}`, { label: "Annulla", run: () => radar.toggleFollow(f) });
+  };
 
   // le release hanno titoli come "v0.40.17": davanti ci mettiamo il nome del progetto
   const title =
@@ -100,7 +132,7 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
     >
       {isVideo && item.image && (
         <div className="relative aspect-video overflow-hidden border-b-[3px] border-card-ink bg-card-ink">
-          <Thumb src={item.image} className="size-full object-cover" />
+          <Thumb src={item.image} width={640} className="size-full object-cover" />
           <div className="halftone pointer-events-none absolute inset-0" />
           <span className="absolute inset-0 grid place-items-center">
             <span className="grid size-14 place-items-center rounded-full border-[3px] border-card-ink bg-cream text-card-ink shadow-zine-ink">
@@ -159,6 +191,8 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
         {!isVideo && item.image && (
           <Thumb
             src={item.image}
+            width={76}
+            height={76}
             className={`size-[76px] shrink-0 border-[3px] border-card-ink bg-card-ink/15 object-cover ${isPodcast ? "" : "self-start"}`}
           />
         )}
@@ -167,7 +201,10 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
       <footer className="flex items-center justify-between gap-2 pb-1 pl-4 pr-1">
         <p className="min-w-0 truncate font-mono text-[11px] font-bold uppercase tracking-wide">
           {item.source.name}
-          <span className="font-medium opacity-70"> · {timeAgo(item.publishedAt)}</span>
+          <span className="font-medium opacity-70">
+            {" · "}
+            <TimeAgo iso={item.publishedAt} />
+          </span>
         </p>
         <div className="flex shrink-0 items-center">
           <ActionButton
@@ -183,7 +220,7 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
           <ActionButton
             label={isSaved ? "Togli dai salvati" : "Salva"}
             pressed={isSaved}
-            onClick={() => radar.toggleSaved(item)}
+            onClick={toggleSaved}
           >
             <Icon name="bookmark" size={20} filled={isSaved} />
           </ActionButton>

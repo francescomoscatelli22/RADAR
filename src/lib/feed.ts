@@ -89,6 +89,46 @@ export function timeAgo(iso: string, now = Date.now()) {
   return `${Math.round(d / 30)} mesi`;
 }
 
+/**
+ * Miniatura leggera: le immagini dei siti (e soprattutto le copertine dei podcast, spesso 3000×3000)
+ * passano dal servizio gratuito wsrv.nl, che le rimpicciolisce alla misura vera e le converte in WebP.
+ * Esempio: una copertina da 2 MB diventa ~8 KB. Le miniature di YouTube sono già leggere: restano dirette.
+ * Se wsrv.nl non risponde, la card usa l'originale (vedi Thumb in FeedCard).
+ */
+export function thumbUrl(src: string, width: number, height?: number) {
+  try {
+    const { protocol, hostname } = new URL(src);
+    if (!protocol.startsWith("http") || hostname.endsWith("ytimg.com")) return src;
+  } catch {
+    return src;
+  }
+  const qs = new URLSearchParams({ url: src, w: String(width), dpr: "2", output: "webp", q: "72", maxage: "14d" });
+  if (height) {
+    qs.set("h", String(height));
+    qs.set("fit", "cover");
+  }
+  return `https://wsrv.nl/?${qs}`;
+}
+
+/** "Oggi", "Ieri" o "lunedì 18 novembre": l'etichetta del giorno nel feed. */
+export function dayLabel(iso: string, now = Date.now()) {
+  const d = new Date(iso);
+  const start = (t: number) => {
+    const x = new Date(t);
+    x.setHours(0, 0, 0, 0);
+    return x.getTime();
+  };
+  const diff = Math.round((start(now) - start(d.getTime())) / 86_400_000);
+  if (diff <= 0) return "Oggi";
+  if (diff === 1) return "Ieri";
+  return new Intl.DateTimeFormat("it-IT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(new Date(now).getFullYear() !== d.getFullYear() ? { year: "numeric" } : {}),
+  }).format(d);
+}
+
 /** Durata di un podcast: "2054" (secondi) o "34:12" → "34 min". */
 export function prettyDuration(raw?: string) {
   if (!raw) return null;

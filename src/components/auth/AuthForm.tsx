@@ -54,8 +54,9 @@ export default function AuthForm({ mode }: { mode: Mode }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const db = supabaseBrowser();
-    if (!db || busy) return;
+    if (busy) return;
+    const db = await supabaseBrowser();
+    if (!db) return;
     setBusy(true);
     setError(null);
     try {

@@ -57,15 +57,26 @@ async function fetchPage(q: Pick<FeedQuery, "topics" | "sources" | "format">, cu
   return (await res.json()) as FeedPage;
 }
 
+/*
+  Memoria del feed finché l'app resta aperta: cambiando scheda e tornando indietro
+  la lista ricompare subito, con tutte le pagine già caricate e nello stesso punto di scorrimento.
+*/
+type Memory = { items: FeedItem[]; next: string | null; scrollY: number };
+const memory = new Map<string, Memory>();
+
 export function useFeed(query: FeedQuery) {
   const { topics, sources, format, enabled } = query;
   const key = JSON.stringify([topics ?? [], sources ?? [], format]);
-  const [data, setData] = useState<Data | null>(null);
+  const [data, setData] = useState<Data | null>(() => {
+    const m = memory.get(key);
+    return m ? { key, items: m.items, next: m.next, status: "ready", offline: false } : null;
+  });
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [token, setToken] = useState(0);
   const [fresh, setFresh] = useState<FeedItem[]>([]);
   const busy = useRef(false);
+  const manual = useRef(false); // true = l'utente ha chiesto di ricaricare (allora si sostituisce tutto)
   // sempre l'ultima richiesta, senza dover rifare gli effetti a ogni render
   const latest = useRef({ topics, sources, format, key });
   useEffect(() => {
@@ -76,6 +87,12 @@ export function useFeed(query: FeedQuery) {
     if (!enabled) return;
     const ctrl = new AbortController();
     const q = latest.current;
+    const replaceAll = manual.current;
+    manual.current = false;
+
+    // 0) cambiando filtro e tornando indietro: la lista già vista ricompare dalla memoria
+    const m = memory.get(q.key);
+    if (m) setData((prev) => (prev?.key === q.key ? prev : { key: q.key, items: m.items, next: m.next, status: "ready", offline: false }));
 
     // 1) la copia salvata (se c'è) appare subito
     Promise.resolve(readCache(q.key)).then((cached) => {
@@ -87,6 +104,19 @@ export function useFeed(query: FeedQuery) {
     fetchPage(q, null, ctrl.signal)
       .then((page) => {
         writeCache(q.key, page);
+        const kept = memory.get(q.key);
+        // lista già in memoria (si torna da un'altra scheda) e la pagina nuova si "aggancia" a quella:
+        // non si tocca la lista (resta il punto di lettura) e i nuovi arrivi compaiono con "N nuovi segnali"
+        if (!replaceAll && kept && kept.items.length) {
+          const seen = new Set(kept.items.map((i) => i.id));
+          const joins = page.items.some((i) => seen.has(i.id));
+          if (joins) {
+            const top = new Date(kept.items[0].publishedAt).getTime();
+            setFresh(page.items.filter((i) => !seen.has(i.id) && new Date(i.publishedAt).getTime() >= top));
+            setData((prev) => (prev && prev.key === q.key ? { ...prev, offline: false } : prev));
+            return;
+          }
+        }
         setData({ key: q.key, items: page.items, next: page.next, status: "ready", offline: false });
       })
       .catch((err) => {
@@ -111,6 +141,20 @@ export function useFeed(query: FeedQuery) {
     itemsRef.current = view?.items ?? [];
   });
 
+  // la lista caricata resta in memoria (il punto di scorrimento lo aggiorna rememberScroll)
+  useEffect(() => {
+    if (!view || view.status !== "ready" || !view.items.length) return;
+    const old = memory.get(view.key);
+    memory.set(view.key, { items: view.items, next: view.next, scrollY: old?.scrollY ?? 0 });
+  }, [view]);
+
+  /** Il punto di scorrimento da ripristinare tornando su questa lista (0 = dall'inizio). */
+  const savedScroll = useCallback(() => memory.get(latest.current.key)?.scrollY ?? 0, []);
+  const rememberScroll = useCallback((y: number) => {
+    const m = memory.get(latest.current.key);
+    if (m) m.scrollY = y;
+  }, []);
+
   const loadMore = useCallback(async () => {
     const cur = view;
     if (!cur?.next || busy.current) return;
@@ -133,6 +177,7 @@ export function useFeed(query: FeedQuery) {
   }, [view]);
 
   const refresh = useCallback(() => {
+    manual.current = true;
     setFresh([]);
     setRefreshing(true);
     setToken((t) => t + 1);
@@ -193,5 +238,7 @@ export function useFeed(query: FeedQuery) {
     refreshing,
     loadMore,
     refresh,
+    savedScroll,
+    rememberScroll,
   };
 }

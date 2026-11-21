@@ -30,6 +30,8 @@ const permanent = Permanent_Marker({
   variable: "--font-permanent",
   subsets: ["latin"],
   weight: "400",
+  // compare solo negli adesivi dell'intro: non serve scaricarlo prima di tutto il resto
+  preload: false,
 });
 
 // Testi di lettura

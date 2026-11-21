@@ -1,8 +1,9 @@
 import AppHeader from "@/components/nav/AppHeader";
 import BottomNav from "@/components/nav/BottomNav";
+import Toaster from "@/components/ui/Toaster";
 
 /*
-  Cornice dell'app vera e propria: testata in alto, tre schede in basso.
+  Cornice dell'app vera e propria: testata in alto, tre schede in basso, notifiche brevi.
   Le pagine di accesso e di scelta degli argomenti stanno fuori da questo gruppo (niente barre).
 */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
+      <Toaster />
       <BottomNav />
     </>
   );

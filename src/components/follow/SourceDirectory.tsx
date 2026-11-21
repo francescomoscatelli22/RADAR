@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FORMAT_LABEL, PLATFORM_FORMAT, type Format, type SourceInfo } from "@/lib/feed";
 import { radar, useRadar } from "@/lib/store";
+import { toast } from "@/lib/toast";
 import Button from "@/components/ui/Button";
 import Chip from "@/components/ui/Chip";
 import Icon, { type IconName } from "@/components/ui/Icon";
@@ -115,7 +116,11 @@ export default function SourceDirectory() {
                   type="button"
                   aria-pressed={on}
                   aria-label={on ? `Non seguire più ${s.name}` : `Segui ${s.name}`}
-                  onClick={() => radar.toggleFollow({ ids: s.ids, name: s.name, platform: s.platform })}
+                  onClick={() => {
+                    const f = { ids: s.ids, name: s.name, platform: s.platform };
+                    radar.toggleFollow(f);
+                    toast(on ? `Non segui più ${s.name}` : `Ora segui ${s.name}`, { label: "Annulla", run: () => radar.toggleFollow(f) });
+                  }}
                   className={`inline-flex min-h-11 min-w-[104px] items-center justify-center gap-1.5 border-[3px] px-3 font-display text-sm font-extrabold uppercase transition-colors duration-150 active:scale-[0.97] motion-reduce:transition-none ${
                     on ? "border-cream bg-signal text-card-ink" : "border-cream/50 text-cream"
                   }`}

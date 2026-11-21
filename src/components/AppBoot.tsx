@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { PROVIDER_NAME, signInWithProvider, signOut, useAuth, type OAuthProvider } from "@/lib/auth";
 import { radar, useRadar } from "@/lib/store";
-import Intro from "./intro/Intro";
-import Splash, { type Stage } from "./splash/Splash";
+import type { Stage } from "./splash/Splash";
+
+// Intro e splash (con la libreria di animazione Motion, ~75 KB compressi) servono solo aprendo l'app da "/":
+// caricate a parte, le altre pagine non le scaricano. Su "/" l'intro resta nell'HTML del server, quindi compare subito.
+const Intro = dynamic(() => import("./intro/Intro"));
+const Splash = dynamic(() => import("./splash/Splash"));
 
 type Phase = Stage | "gone";
 // caricamento animato: "loading" (8,5 s con la barra) → "revealing" (le strisce scoprono la schermata iniziale) → "done"

@@ -40,14 +40,15 @@ let stop: (() => void) | null = null;
 /** Avvia la sincronizzazione per questo utente. Restituisce la funzione che la ferma. */
 export function startSync(userId: string) {
   stop?.();
-  const db = supabaseBrowser();
-  if (!db) return () => {};
+  const pending = supabaseBrowser();
+  if (!pending) return () => {};
 
   let cancelled = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let applyingRemote = false;
 
   const push = async () => {
+    const db = await pending;
     const { ready: _ready, ...local } = radar.get();
     void _ready;
     const { updatedAt, ...data } = local;
@@ -67,6 +68,7 @@ export function startSync(userId: string) {
   (async () => {
     setStatus("pulling");
     try {
+      const db = await pending;
       const { data: row } = await db.from("user_state").select("data, updated_at").eq("user_id", userId).maybeSingle<Row>();
       if (cancelled) return;
       const local = radar.get();

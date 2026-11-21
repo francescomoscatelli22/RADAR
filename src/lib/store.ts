@@ -71,19 +71,38 @@ function getState(): RadarState {
   return (state ??= load());
 }
 
-function subscribe(cb: () => void) {
-  listeners.add(cb);
-  const onStorage = (e: StorageEvent) => {
+// un solo ascoltatore per tutta l'app: le modifiche fatte in un'altra scheda del browser arrivano qui
+let watchingStorage = false;
+function watchStorage() {
+  if (watchingStorage) return;
+  watchingStorage = true;
+  window.addEventListener("storage", (e) => {
     if (e.key === KEY) {
       state = load();
       emit();
     }
-  };
-  window.addEventListener("storage", onStorage);
+  });
+}
+
+function subscribe(cb: () => void) {
+  watchStorage();
+  listeners.add(cb);
   return () => {
     listeners.delete(cb);
-    window.removeEventListener("storage", onStorage);
   };
+}
+
+// insiemi di id ricalcolati solo quando l'archivio cambia: "è salvato?" diventa una ricerca istantanea
+let indexFor: RadarState | null = null;
+let savedIds = new Set<string>();
+let followedIds = new Set<string>();
+function index() {
+  const s = getState();
+  if (indexFor !== s) {
+    indexFor = s;
+    savedIds = new Set(s.saved.map((i) => i.id));
+    followedIds = new Set(s.follows.flatMap((f) => f.ids));
+  }
 }
 
 export const radar = {
@@ -107,6 +126,12 @@ export const radar = {
     const has = cur.some((x) => x.id === item.id);
     commit({ saved: has ? cur.filter((x) => x.id !== item.id) : [item, ...cur].slice(0, MAX_SAVED) });
   },
+  /** Rimette un salvato al suo posto (serve ad "Annulla" dopo averlo tolto). */
+  restoreSaved(item: FeedItem, at: number) {
+    const cur = getState().saved.filter((x) => x.id !== item.id);
+    const pos = Math.max(0, Math.min(at, cur.length));
+    commit({ saved: [...cur.slice(0, pos), item, ...cur.slice(pos)].slice(0, MAX_SAVED) });
+  },
   /** Sostituisce tutto con i dati arrivati dall'account (non conta come modifica locale). */
   replace(data: Omit<RadarData, "updatedAt"> & { updatedAt: number }) {
     commit(data, false);
@@ -119,4 +144,24 @@ export const radar = {
 /** Legge l'archivio nei componenti (si aggiorna da solo a ogni modifica). */
 export function useRadar(): RadarState {
   return useSyncExternalStore(subscribe, getState, () => SERVER);
+}
+
+/*
+  Versioni "mirate" per le card: restituiscono solo un sì/no, quindi una card si ridisegna
+  solo quando cambia il SUO stato (salvarne una non ridisegna le altre cento del feed).
+*/
+export function useIsSaved(itemId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => (index(), savedIds.has(itemId)),
+    () => false,
+  );
+}
+
+export function useIsFollowing(sourceId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => (index(), followedIds.has(sourceId)),
+    () => false,
+  );
 }

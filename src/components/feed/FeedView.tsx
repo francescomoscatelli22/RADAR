@@ -1,45 +1,55 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Format } from "@/lib/feed";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { dayLabel, type Format } from "@/lib/feed";
+import { useNow } from "@/lib/clock";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import FeedCard, { FeedCardSkeleton } from "./FeedCard";
 import { useFeed } from "./useFeed";
 
 const PULL_TRIGGER = 64; // quanto bisogna tirare (px) per ricaricare
+const PULL_MAX = 96;
 
-/** "Tira per aggiornare": su iPhone, nell'app installata, non esiste di serie. */
-function usePullToRefresh(onRefresh: () => void, disabled: boolean) {
-  const [pull, setPull] = useState(0);
-  const start = useRef<number | null>(null);
-  const current = useRef(0);
+/**
+ * "Tira per aggiornare": su iPhone, nell'app installata, non esiste di serie.
+ * Velocità: mentre il dito si muove cambia solo questo indicatore (stile scritto direttamente),
+ * non il feed intero, così il gesto resta fluido anche con cento card in lista.
+ */
+function PullToRefresh({ onRefresh, refreshing, disabled }: { onRefresh: () => void; refreshing: boolean; disabled: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  const icon = useRef<SVGSVGElement>(null);
   const cb = useRef(onRefresh);
+  const [armed, setArmed] = useState(false); // superata la soglia: lo si dice anche a parole
   useEffect(() => {
     cb.current = onRefresh;
   });
 
   useEffect(() => {
     if (disabled) return;
+    let start: number | null = null;
+    let pull = 0;
+    const paint = (px: number) => {
+      if (!box.current) return;
+      box.current.style.height = `${px}px`;
+      if (icon.current) icon.current.style.transform = `rotate(${px * 4}deg)`;
+    };
     const down = (e: TouchEvent) => {
-      start.current = window.scrollY <= 0 ? e.touches[0].clientY : null;
+      start = window.scrollY <= 0 ? e.touches[0].clientY : null;
     };
     const move = (e: TouchEvent) => {
-      if (start.current === null) return;
-      const dy = e.touches[0].clientY - start.current;
-      if (dy <= 0 || window.scrollY > 0) {
-        current.current = 0;
-        setPull(0);
-        return;
-      }
-      current.current = Math.min(dy * 0.5, 96);
-      setPull(current.current);
+      if (start === null) return;
+      const dy = e.touches[0].clientY - start;
+      pull = dy <= 0 || window.scrollY > 0 ? 0 : Math.min(dy * 0.5, PULL_MAX);
+      paint(pull);
+      setArmed(pull >= PULL_TRIGGER);
     };
     const up = () => {
-      if (current.current >= PULL_TRIGGER) cb.current();
-      start.current = null;
-      current.current = 0;
-      setPull(0);
+      if (pull >= PULL_TRIGGER) cb.current();
+      start = null;
+      pull = 0;
+      paint(0);
+      setArmed(false);
     };
     window.addEventListener("touchstart", down, { passive: true });
     window.addEventListener("touchmove", move, { passive: true });
@@ -53,7 +63,36 @@ function usePullToRefresh(onRefresh: () => void, disabled: boolean) {
     };
   }, [disabled]);
 
-  return pull;
+  return (
+    <div
+      ref={box}
+      aria-hidden={!refreshing}
+      className="flex items-end justify-center overflow-hidden text-cream-2 transition-[height] duration-150 motion-reduce:transition-none"
+      style={refreshing ? { height: 44 } : { height: 0 }}
+    >
+      <span className={`flex items-center gap-2 pb-2 font-mono text-[11px] font-bold uppercase tracking-wide ${armed ? "text-signal" : ""}`}>
+        <Icon
+          ref={icon}
+          name="refresh"
+          size={20}
+          className={refreshing ? "animate-spin motion-reduce:animate-none" : ""}
+        />
+        {refreshing ? "Aggiorno…" : armed ? "Lascia per aggiornare" : ""}
+      </span>
+    </div>
+  );
+}
+
+/** Etichetta del giorno nel feed ("Oggi", "Ieri", "lunedì 18 novembre"). */
+function DayDivider({ label }: { label: string }) {
+  return (
+    <li aria-hidden="true" className="flex items-center gap-3 pt-2 first:pt-0">
+      <span className="bg-cream px-2 py-1 font-mono text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-card-ink">
+        {label}
+      </span>
+      <span className="h-[3px] flex-1 bg-cream/15" />
+    </li>
+  );
 }
 
 type Props = {
@@ -67,21 +106,32 @@ type Props = {
 
 export default function FeedView({ topics, sources, format, enabled = true, empty }: Props) {
   const feed = useFeed({ topics, sources, format, enabled });
-  const pull = usePullToRefresh(feed.refresh, !enabled);
   const sentinel = useRef<HTMLDivElement>(null);
-  const { hasMore, loadMore } = feed;
+  const { hasMore, loadMore, savedScroll, rememberScroll } = feed;
+  const now = useNow();
+  const hasItems = feed.items.length > 0;
 
-  // ogni minuto l'app si ridisegna, così "5 min" diventa "6 min" senza ricaricare
-  const [, setTick] = useState(0);
+  // tornando su questa lista si riparte dal punto in cui eri (e uscendo lo si ricorda)
+  useLayoutEffect(() => {
+    if (!hasItems) return;
+    const y = savedScroll();
+    if (y > 0) {
+      // subito dopo che Next.js ha portato la nuova pagina in cima
+      const id = window.setTimeout(() => window.scrollTo(0, y), 0);
+      return () => window.clearTimeout(id);
+    }
+  }, [hasItems, savedScroll]);
   useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
+    if (!hasItems) return;
+    const onScroll = () => rememberScroll(window.scrollY); // solo un numero in memoria: costo nullo
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [hasItems, rememberScroll]);
 
   useEffect(() => {
     const el = sentinel.current;
     if (!el || !hasMore) return;
-    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), { rootMargin: "700px 0px" });
+    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), { rootMargin: "900px 0px" });
     io.observe(el);
     return () => io.disconnect();
   }, [hasMore, loadMore, feed.items.length]);
@@ -111,39 +161,26 @@ export default function FeedView({ topics, sources, format, enabled = true, empt
     );
   }
 
-  if (feed.items.length === 0) return <>{empty}</>;
+  if (!hasItems) return <>{empty}</>;
 
   return (
     <div>
       {/* segnali arrivati mentre l'app era aperta: un tocco e salgono in cima */}
       {feed.freshCount > 0 && (
-        <div className="pointer-events-none sticky top-[calc(var(--safe-top)+8px)] z-30 -mt-1 mb-3 flex justify-center">
+        <div className="pointer-events-none sticky top-[calc(var(--safe-top)+124px)] z-30 -mt-1 mb-3 flex h-0 justify-center overflow-visible">
           <button
             type="button"
             onClick={feed.showFresh}
-            className="pointer-events-auto flex items-center gap-2 border-[3px] border-cream bg-signal px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-ink shadow-zine"
+            className="toast-in pointer-events-auto flex h-11 items-center gap-2 border-[3px] border-card-ink bg-signal px-4 font-mono text-xs font-bold uppercase tracking-wide text-ink shadow-zine"
           >
             <Icon name="radar" size={16} />
             {feed.freshCount === 1 ? "1 nuovo segnale" : `${feed.freshCount} nuovi segnali`}
+            <Icon name="back" size={14} strokeWidth={3} className="rotate-90" />
           </button>
         </div>
       )}
 
-      {/* indicatore di "tira per aggiornare" / aggiornamento in corso */}
-      <div
-        aria-hidden={pull === 0 && !feed.refreshing}
-        className="flex items-end justify-center overflow-hidden text-cream-2 transition-[height] duration-150 motion-reduce:transition-none"
-        style={{ height: feed.refreshing ? 40 : pull }}
-      >
-        <span className="pb-2">
-          <Icon
-            name="refresh"
-            size={22}
-            className={feed.refreshing ? "animate-spin motion-reduce:animate-none" : ""}
-            style={{ transform: feed.refreshing ? undefined : `rotate(${pull * 4}deg)` }}
-          />
-        </span>
-      </div>
+      <PullToRefresh onRefresh={feed.refresh} refreshing={feed.refreshing} disabled={!enabled} />
 
       {feed.offline && (
         <p
@@ -155,11 +192,19 @@ export default function FeedView({ topics, sources, format, enabled = true, empt
       )}
 
       <ul className="flex flex-col gap-5">
-        {feed.items.map((item, i) => (
-          <li key={item.id}>
-            <FeedCard item={item} index={i} />
-          </li>
-        ))}
+        {feed.items.map((item, i) => {
+          const day = dayLabel(item.publishedAt, now);
+          const divider = i === 0 || day !== dayLabel(feed.items[i - 1].publishedAt, now);
+          return (
+            <Fragment key={item.id}>
+              {divider && <DayDivider label={day} />}
+              {/* "cv-auto": le card lontane dallo schermo non vengono disegnate finché non ci arrivi */}
+              <li className="cv-auto">
+                <FeedCard item={item} index={i} />
+              </li>
+            </Fragment>
+          );
+        })}
       </ul>
 
       {feed.hasMore && (
