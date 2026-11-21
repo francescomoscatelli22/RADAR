@@ -1,0 +1,36 @@
+name: Sveglia raccolta
+
+# La raccolta (ingest.yml) va a catena: ogni esecuzione lancia la successiva.
+# Se la catena si spezza (guasto di GitHub, esecuzione interrotta) e il cron di GitHub
+# salta i giri, la raccolta resta ferma. Questa "sveglia" la fa ripartire.
+# La chiama ogni 15 minuti un servizio esterno gratuito (cron-job.org) con un token
+# limitato a questo repository. Dura pochi secondi: guarda se la raccolta sta girando
+# o è in coda; se sì non fa niente, se no la rilancia.
+# È un workflow a parte (senza il gruppo "ingest") perché, se la sveglia lanciasse
+# direttamente ingest.yml, la sua esecuzione in coda verrebbe cancellata dalla catena
+# a ogni giro e la lista di Actions si riempirebbe di esecuzioni annullate.
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write # serve a leggere le esecuzioni e a rilanciare la raccolta
+
+jobs:
+  controlla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Rilancia la raccolta se è ferma
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # stati delle ultime esecuzioni della raccolta (in corso, in coda, finite...)
+          stati=$(gh run list --repo "${{ github.repository }}" --workflow ingest.yml \
+            --limit 5 --json status --jq '.[].status')
+          echo "Ultime esecuzioni: $(echo $stati)"
+          if echo "$stati" | grep -qvx completed; then
+            echo "La raccolta sta girando o è in coda: niente da fare."
+          else
+            echo "La raccolta è ferma: la rilancio."
+            gh workflow run ingest.yml --repo "${{ github.repository }}" --ref main
+          fi
