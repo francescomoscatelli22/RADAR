@@ -315,8 +315,8 @@ const SLOTS = [
   { x: 200, y: 606, rot: 1.5 },
 ];
 
-const FIRST_AT = 1.0; // il primo blocco arriva a 1 s
-const GAP = 0.7; // e gli altri a distanza di 0,7 s (l'ultimo arriva a 4,5 s)
+const FIRST_AT = 2.8; // il primo blocco arriva a 2,8 s, dopo le parole giganti
+const GAP = 0.6; // e gli altri a distanza di 0,6 s (l'ultimo arriva a 5,8 s)
 
 type Placed = { kind: Kind; signal: Signal };
 

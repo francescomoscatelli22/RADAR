@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
-import { animate, motion, useMotionValue, useTransform } from "motion/react";
-import type { Signal, SignalsResponse } from "@/lib/signals";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { animate, motion, useMotionValue, useTransform, type AnimationPlaybackControls } from "motion/react";
+import DevPause from "./DevPause";
+import { windowLabel, type Signal, type SignalsResponse } from "@/lib/signals";
+import { useOpeningCategories } from "../splash/news";
 import Tiles from "./tiles";
 import {
   ACCENT_SERIF,
@@ -31,8 +33,9 @@ import {
   Apposta è l'opposto dello Splash: fondo giallo pieno, niente radar, scritte giganti.
 
   Cosa si vede (il tempo è quello dell'orologio unico `time`):
-    0,2 – 1,0 s  le parole "L'AI / CHE / CONTA." salgono una alla volta, parte il contatore
-    1,0 – 5,0 s  i 6 formati del feed arrivano dai lati come adesivi, uno ogni 0,7 s, ognuno con la sua micro-animazione
+    0,5 – 2,8 s  le parole "L'AI / CHE / CONTA." salgono una alla volta (lente, una ogni 0,6 s)
+    2,3 – 3,6 s  arrivano il contatore, la frase d'accento e il nastro
+    2,8 – 5,8 s  i 6 formati del feed arrivano dai lati come adesivi, uno ogni 0,6 s, ognuno con la sua micro-animazione
     7,4 s        adesivo "SI PARTE!"
     8,5 – 9,5 s  strappo a strisce → schermata iniziale
 
@@ -40,22 +43,6 @@ import {
   da /api/signals): se il database non risponde, il contatore dice "—" e i blocchi non compaiono.
   Solo la barra è grafica: è a tempo fisso.
 */
-
-// temi del nastro (decorativi: l'intro non dipende dai dati dello Splash)
-const TOPICS = [
-  "AI generativa",
-  "Immagini",
-  "Video",
-  "3D e scene",
-  "UI / UX",
-  "Agenti",
-  "Modelli linguistici",
-  "Strumenti",
-  "Open source",
-  "Prompt design",
-  "Audio e voce",
-  "Codice",
-];
 
 const INK = "var(--color-card-ink)";
 const YELLOW = "var(--color-card-article)";
@@ -66,7 +53,7 @@ type Geometry = RefObject<{ w: number; h: number }>;
 
 // ---------- le tre parole giganti ----------
 function Word({ time, at, instant, children }: { time: Time; at: number; instant: boolean; children: ReactNode }) {
-  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - at) / 0.55)));
+  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - at) / 1.1)));
   const y = useTransform(time, (t) => `${(1 - p(t)) * 118}%`);
   const rotate = useTransform(time, (t) => (1 - p(t)) * 7);
   return (
@@ -92,13 +79,13 @@ function Headline({ time, instant }: { time: Time; instant: boolean }) {
         color: INK,
       }}
     >
-      <Word time={time} at={0.2} instant={instant}>
+      <Word time={time} at={0.5} instant={instant}>
         L&apos;AI
       </Word>
-      <Word time={time} at={0.35} instant={instant}>
+      <Word time={time} at={1.1} instant={instant}>
         CHE
       </Word>
-      <Word time={time} at={0.5} instant={instant}>
+      <Word time={time} at={1.7} instant={instant}>
         <motion.span
           style={{ display: "inline-block", padding: "0 12px 6px", background: INK, color: YELLOW, rotate: blockRotate }}
         >
@@ -111,7 +98,7 @@ function Headline({ time, instant }: { time: Time; instant: boolean }) {
 
 // frase d'accento accanto a "CHE"
 function Phrase({ time, instant }: { time: Time; instant: boolean }) {
-  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - 0.9) / 0.5)));
+  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - 2.9) / 0.8)));
   const opacity = useTransform(time, (t) => p(t));
   const y = useTransform(time, (t) => 14 * (1 - p(t)));
   return (
@@ -119,7 +106,7 @@ function Phrase({ time, instant }: { time: Time; instant: boolean }) {
       style={{
         position: "absolute",
         left: 218,
-        top: 168,
+        top: 190,
         width: 150,
         margin: 0,
         fontFamily: ACCENT_SERIF,
@@ -137,16 +124,27 @@ function Phrase({ time, instant }: { time: Time; instant: boolean }) {
 }
 
 // ---------- contatore "segnali rilevati": adesivo nero accanto a "L'AI" ----------
-// Il numero è VERO: quanti contenuti ha raccolto Radar finora (letti dal database tramite /api/signals).
-// Sale da 0 al totale durante il caricamento. Se il database non risponde, mostra "—" invece di inventare.
+// Il numero è VERO: quanti segnali sono arrivati in Radar nella finestra di tempo scritta sotto
+// ("negli ultimi 15 minuti"…), letti dal database tramite /api/signals.
+// Sale da 0 al numero durante il caricamento. Se il database non risponde, mostra "—" invece di inventare.
 type SignalsState = "loading" | "ok" | "error";
 
-function Counter({ time, total, state }: { time: Time; total: Time; state: SignalsState }) {
+function Counter({
+  time,
+  total,
+  state,
+  windowText,
+}: {
+  time: Time;
+  total: Time;
+  state: SignalsState;
+  windowText: string;
+}) {
   const n = useTransform([time, total], ([t, tot]: number[]) => {
-    const p = clamp01((t - 0.9) / 6.5);
+    const p = clamp01((t - 2.4) / 5.0);
     return String(Math.round(tot * (1 - (1 - p) * (1 - p))));
   });
-  const scale = useTransform(time, (t) => backOut(clamp01((t - 0.8) / 0.5)));
+  const scale = useTransform(time, (t) => backOut(clamp01((t - 2.3) / 0.7)));
   // se i segnali superano 9999 il numero si rimpicciolisce per restare dentro l'adesivo
   const numberSize = useTransform(total, (v) => (v >= 10000 ? 34 : 44));
   return (
@@ -154,7 +152,7 @@ function Counter({ time, total, state }: { time: Time; total: Time; state: Signa
       style={{
         position: "absolute",
         left: 236,
-        top: 92,
+        top: 84,
         display: "flex",
         flexDirection: "column",
         gap: 4,
@@ -183,6 +181,21 @@ function Counter({ time, total, state }: { time: Time; total: Time; state: Signa
       <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 8.5, lineHeight: 1.1, letterSpacing: "0.12em" }}>
         SEGNALI RILEVATI
       </span>
+      {state === "ok" && windowText && (
+        <span
+          style={{
+            fontFamily: MONO,
+            fontWeight: 600,
+            fontSize: 7.5,
+            lineHeight: 1.1,
+            letterSpacing: "0.06em",
+            color: YELLOW,
+            textTransform: "uppercase",
+          }}
+        >
+          {windowText}
+        </span>
+      )}
     </motion.div>
   );
 }
@@ -190,7 +203,11 @@ function Counter({ time, total, state }: { time: Time; total: Time; state: Signa
 // ---------- nastro nero con i temi che scorre ----------
 function Tape({ time }: { time: Time }) {
   const group = useRef<HTMLDivElement>(null);
-  const enter = useTransform(time, (t) => -520 * (1 - easeOut(clamp01((t - 0.9) / 0.6))));
+  // i settori AI (tutti, dallo stesso elenco della raccolta) in un ordine diverso a ogni apertura;
+  // se ne mostrano 30, più che sufficienti per tutta la durata dell'intro
+  const all = useOpeningCategories();
+  const topics = useMemo(() => [...all].reverse().slice(0, 30), [all]);
+  const enter = useTransform(time, (t) => -520 * (1 - easeOut(clamp01((t - 2.6) / 1.0))));
   const scroll = useTransform(time, (t) => -((t * 55) % (group.current?.offsetWidth || 900)));
   return (
     <motion.div
@@ -212,7 +229,7 @@ function Tape({ time }: { time: Time }) {
       <motion.div style={{ display: "flex", width: "max-content", x: scroll }}>
         {[0, 1].map((g) => (
           <div key={g} ref={g === 0 ? group : undefined} style={{ display: "flex", flex: "none" }}>
-            {TOPICS.map((topic, i) => (
+            {topics.map((topic, i) => (
               <span
                 key={topic}
                 style={{
@@ -392,8 +409,10 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const time = useMotionValue(0);
   const total = useMotionValue(0); // numero vero di segnali raccolti (0 finché la risposta non arriva)
   const [signals, setSignals] = useState<SignalsState>("loading");
+  const [windowText, setWindowText] = useState(""); // es. "negli ultimi 15 minuti"
   const [items, setItems] = useState<Signal[]>([]); // gli ultimi contenuti veri, uno per formato (vuoto se il database non risponde)
   const rootRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<AnimationPlaybackControls | null>(null);
   const geometry = useRef({ w: ART_W, h: ART_H });
   const [scale, setScale] = useState(0); // 0 = non ancora misurato (resta nascosto)
 
@@ -418,7 +437,10 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("risposta non valida"))))
       .then((data: Partial<SignalsResponse>) => {
         if (typeof data.count !== "number") throw new Error("numero mancante");
-        total.set(data.count);
+        // il contatore mostra i segnali arrivati nella finestra più stretta che ne ha almeno uno;
+        // se negli ultimi 7 giorni non ne è arrivato nessuno, dice 0 (vero) su quei 7 giorni
+        total.set(data.recent?.count ?? 0);
+        setWindowText(windowLabel(data.recent?.seconds ?? 604800));
         setItems(Array.isArray(data.items) ? data.items : []);
         setSignals("ok");
       })
@@ -454,9 +476,11 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       ease: "linear",
       onComplete: () => handleDone(),
     });
+    controlsRef.current = controls; // serve solo alla barra di pausa in sviluppo
     return () => {
       stop();
       controls.stop();
+      controlsRef.current = null;
     };
   }, [time, reduce]);
 
@@ -517,7 +541,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
           <Phrase time={time} instant={reduce} />
           {!reduce && (
             <>
-              <Counter time={time} total={total} state={signals} />
+              <Counter time={time} total={total} state={signals} windowText={windowText} />
               <Tape time={time} />
               <Tiles time={time} items={items} />
               <GoSticker time={time} />
@@ -528,6 +552,9 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       </motion.div>
 
       {!reduce && STRIPE_COLORS.map((_, i) => <Stripe key={i} time={time} i={i} geometry={geometry} />)}
+
+      {/* solo in sviluppo: pausa e scorrimento del tempo; nella versione di produzione non viene nemmeno inclusa */}
+      {process.env.NODE_ENV !== "production" && <DevPause time={time} controlsRef={controlsRef} />}
     </div>
   );
 }

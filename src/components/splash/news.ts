@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 /*
   Notizie di ESEMPIO per la schermata iniziale (decorative, non vere).
   Nel feed vero arriveranno dal raccoglitore di fonti.
@@ -71,5 +73,41 @@ function interleavedLabels(): string[] {
 }
 
 const LABELS = interleavedLabels();
-export const CATEGORIES_A: string[] = LABELS.filter((_, i) => i % 2 === 0);
-export const CATEGORIES_B: string[] = LABELS.filter((_, i) => i % 2 === 1);
+
+function shuffled<T>(list: T[]): T[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Ordine dei settori per QUESTA apertura dell'app: ogni volta diverso.
+// Si calcola una volta sola per apertura (così intro e splash vanno d'accordo) e la prima voce
+// non è mai uguale a quella dell'apertura precedente (la ricordiamo nel browser).
+let thisOpening: string[] | null = null;
+function openingOrder(): string[] {
+  if (thisOpening) return thisOpening;
+  let list = shuffled(LABELS);
+  try {
+    const last = localStorage.getItem("radar-tape-first");
+    if (last && list[0] === last) list = [...list.slice(1), list[0]];
+    localStorage.setItem("radar-tape-first", list[0]);
+  } catch {
+    // niente memoria del browser (finestra privata…): va bene lo stesso, resta mescolato
+  }
+  thisOpening = list;
+  return list;
+}
+
+const NO_CATEGORIES: string[] = [];
+const subscribe = () => () => {};
+
+/**
+ * I settori dell'AI mescolati per questa apertura. Sul server (e nel primo disegno) è vuoto:
+ * l'ordine casuale esiste solo nel browser, così non ci sono differenze tra server e browser.
+ */
+export function useOpeningCategories(): string[] {
+  return useSyncExternalStore(subscribe, openingOrder, () => NO_CATEGORIES);
+}

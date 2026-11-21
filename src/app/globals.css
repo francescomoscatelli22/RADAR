@@ -27,6 +27,15 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+/* anteprima con la cornice del telefono (solo sviluppo, vedi AppBoot): su un telefono vero la barra di scorrimento non si vede */
+html.in-phone-frame,
+html.in-phone-frame body {
+  scrollbar-width: none;
+}
+html.in-phone-frame::-webkit-scrollbar,
+html.in-phone-frame body::-webkit-scrollbar {
+  display: none;
+}
 
 /* scheletro di caricamento: un riflesso che scorre (fermo con "Riduci movimento") */
 @keyframes radar-shimmer {

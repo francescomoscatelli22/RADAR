@@ -18,6 +18,8 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // niente pallino "N" di Next.js in basso a sinistra durante lo sviluppo (copre l'interfaccia nelle anteprime)
+  devIndicators: false,
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

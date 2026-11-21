@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Signal, SignalKind, SignalsResponse } from "@/lib/signals";
+import { RECENT_WINDOWS, type Signal, type SignalKind, type SignalsResponse } from "@/lib/signals";
 
 /*
   Dati VERI per l'intro: quanti contenuti ha raccolto Radar e gli ultimi per ogni formato.
@@ -45,7 +45,17 @@ export async function GET() {
   const latest = (platform: string, n: number) =>
     db.from("items").select(COLUMNS).eq("platform", platform).order("published_at", { ascending: false }).limit(n);
 
-  const [total, video, articles, thread, release, podcast] = await Promise.all([
+  // quanti segnali sono arrivati in ogni finestra di tempo (si conta soltanto, senza scaricare righe)
+  const now = Date.now();
+  const windowCounts = Promise.all(
+    RECENT_WINDOWS.map(async (seconds) => {
+      const since = new Date(now - seconds * 1000).toISOString();
+      const res = await db.from("items").select("id", { count: "exact", head: true }).gte("created_at", since);
+      return { seconds, count: res.error ? null : (res.count ?? 0) };
+    }),
+  );
+
+  const [total, video, articles, thread, release, podcast, windows] = await Promise.all([
     // head: true = conta soltanto, senza scaricare le righe
     db.from("items").select("id", { count: "exact", head: true }),
     latest("youtube", 1),
@@ -53,6 +63,7 @@ export async function GET() {
     latest("hn", 1),
     latest("github", 1),
     latest("podcast", 1),
+    windowCounts,
   ]);
 
   if (total.error || total.count === null) {
@@ -79,6 +90,10 @@ export async function GET() {
     first(podcast) && toSignal("podcast", first(podcast)!),
   ].filter((s): s is Signal => Boolean(s));
 
-  const body: SignalsResponse = { count: total.count, items };
+  // la finestra più stretta con almeno un segnale (le finestre sono in ordine crescente)
+  const hit = windows.find((w) => (w.count ?? 0) > 0);
+  const recent = hit ? { count: hit.count as number, seconds: hit.seconds } : null;
+
+  const body: SignalsResponse = { recent, count: total.count, items };
   return Response.json(body, { headers: { "Cache-Control": "no-store" } });
 }

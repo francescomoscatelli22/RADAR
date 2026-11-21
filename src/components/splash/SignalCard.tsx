@@ -6,7 +6,7 @@ import { u } from "./geometry";
 
 /*
   La card in evidenza sotto il radar: UNA sola alla volta, grande e leggibile.
-  Ogni 2 secondi esce e ne entra un'altra, di un formato diverso
+  Ogni 3,5 secondi esce e ne entra un'altra, di un formato diverso
   (video, post, articolo, thread, release, podcast) e con una notizia diversa.
   Le notizie sono di esempio (vedi news.ts).
 */
@@ -17,9 +17,9 @@ const TILTS = [-2, 1.5, -1.5, 2];
 const SHIFTS = [0, -6, 5, -4];
 
 const FIRST_DELAY_S = 0.9; // la prima card entra dopo che il radar si è disegnato
-const CHANGE_MS = 2000; // poi cambia ogni 2 secondi
+const CHANGE_MS = 3500; // poi cambia ogni 3,5 secondi (1,5 in più di prima: si legge con calma)
 
-const COLOR: Record<Type, string> = {
+export const COLOR: Record<Type, string> = {
   video: "--color-card-video",
   post: "--color-card-post",
   article: "--color-card-article",
@@ -181,7 +181,8 @@ function Card({ live }: { live: Live }) {
   );
 }
 
-export default function SignalCard() {
+// onShow: a ogni nuova card dice quale numero è e di che colore (il radar colora un suo pallino dello stesso colore)
+export default function SignalCard({ onShow }: { onShow?: (n: number, color: string) => void }) {
   const [live, setLive] = useState<Live>({
     item: POOL[0],
     n: 0,
@@ -189,6 +190,10 @@ export default function SignalCard() {
     delay: FIRST_DELAY_S,
   });
   const state = useRef({ current: POOL[0], previous: null as Item | null, cursor: 0, n: 0 });
+  const show = useRef(onShow);
+  useEffect(() => {
+    show.current = onShow;
+  });
 
   useEffect(() => {
     // con "Riduci movimento" la card resta ferma
@@ -203,7 +208,11 @@ export default function SignalCard() {
       s.cursor = idx;
       s.n += 1;
       setLive({ item: POOL[idx], n: s.n, life: CHANGE_MS / 1000, delay: 0 });
+      show.current?.(s.n, `var(${COLOR[POOL[idx].type]})`);
     };
+
+    // la prima card entra dopo FIRST_DELAY_S: il pallino si colora in quel momento
+    const first = setTimeout(() => show.current?.(0, `var(${COLOR[POOL[0].type]})`), FIRST_DELAY_S * 1000);
 
     const start = setTimeout(() => {
       advance();
@@ -211,6 +220,7 @@ export default function SignalCard() {
     }, (FIRST_DELAY_S + CHANGE_MS / 1000) * 1000);
 
     return () => {
+      clearTimeout(first);
       clearTimeout(start);
       if (interval) clearInterval(interval);
     };
