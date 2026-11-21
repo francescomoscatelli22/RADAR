@@ -144,10 +144,12 @@ export function parseFeed(xml: string, platform: Platform): RawItem[] {
   const doc = parser.parse(xml) as Node;
   const rss = doc.rss as Node | undefined;
   const atom = doc.feed as Node | undefined;
+  const rdf = doc["rdf:RDF"] as Node | undefined; // RSS 1.0 (es. le riviste Nature): gli item stanno fuori da <channel>
 
   let entries: Node[] = [];
   if (rss?.channel) entries = ((rss.channel as Node).item as Node[] | undefined) ?? [];
   else if (atom) entries = (atom.entry as Node[] | undefined) ?? [];
+  else if (rdf) entries = (rdf.item as Node[] | undefined) ?? [];
   else throw new Error("Formato feed non riconosciuto (né RSS né Atom)");
 
   return entries

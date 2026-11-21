@@ -56,7 +56,11 @@ export function assignTopics(
   source: Source,
   matchers: Map<string, Matcher[]>,
 ): Item | null {
-  const found = new Set<string>(source.topics);
+  // Argomenti fissi della fonte. Con il "+" davanti (es. "+ai-italia") valgono solo DOPO
+  // il filtro: servono alle fonti generalista (Il Post, BBC…) per dire "se è roba AI, è anche Italia".
+  const fixed = source.topics.filter((t) => !t.startsWith("+"));
+  const afterFilter = source.topics.filter((t) => t.startsWith("+")).map((t) => t.slice(1));
+  const found = new Set<string>(fixed);
 
   if (source.match_keywords) {
     const haystack = `${raw.title} ${raw.summary}`;
@@ -67,5 +71,6 @@ export function assignTopics(
     if (found.size === 0) return null;
   }
 
+  for (const t of afterFilter) found.add(t);
   return { ...raw, topics: [...found] };
 }
