@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import { useRadar } from "@/lib/store";
+import { useSyncStatus } from "@/lib/sync";
 import { FORMAT_LABEL, type Format } from "@/lib/feed";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
@@ -16,12 +18,16 @@ import FormatFilter from "./FormatFilter";
 export default function ForYou() {
   const router = useRouter();
   const { ready, topics } = useRadar();
+  const { user, loading } = useAuth();
+  const sync = useSyncStatus();
+  // con un account si aspetta di sapere se gli argomenti ci sono già (scelti su un altro dispositivo)
+  const waiting = loading || (user !== null && sync !== "ready");
   const [format, setFormat] = useState<Format>("all");
 
   // chi non ha ancora scelto gli argomenti va prima a sceglierli
   useEffect(() => {
-    if (ready && topics === null) router.replace("/argomenti");
-  }, [ready, topics, router]);
+    if (ready && !waiting && topics === null) router.replace("/argomenti");
+  }, [ready, waiting, topics, router]);
 
   if (!ready || topics === null) {
     return (

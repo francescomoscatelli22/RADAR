@@ -8,6 +8,7 @@ import {
   Unbounded,
 } from "next/font/google";
 import AppBoot from "@/components/AppBoot";
+import SyncAgent from "@/components/SyncAgent";
 import "./globals.css";
 
 // Titoli e interfaccia ("opsz" = a corpo grande le lettere diventano più compatte, come in Figma)
@@ -75,6 +76,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${bricolage.variable} ${martian.variable} ${instrument.variable} ${permanent.variable} ${newsreader.variable} ${unbounded.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <SyncAgent />
         <AppBoot>{children}</AppBoot>
       </body>
     </html>
