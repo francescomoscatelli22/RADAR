@@ -319,8 +319,6 @@ const STATUS = [
 
 function Bar({ time, live }: { time: Time; live: Time }) {
   const progress = (t: number) => clamp01(t / BAR_SECONDS);
-  const width = useTransform(time, (t) => `${progress(t) * 100}%`);
-  const stripes = useTransform(live, (t) => `${t * 40}px 0`); // le strisce scorrono anche a barra piena
   const percent = useTransform(time, (t) => `${Math.round(progress(t) * 100)}%`);
   const status = useTransform(time, (t) => {
     const p = progress(t);
@@ -358,18 +356,42 @@ function Bar({ time, live }: { time: Time; live: Time }) {
           boxShadow: `4px 4px 0 ${INK}`,
         }}
       >
-        <motion.div
-          style={{
-            height: "100%",
-            boxSizing: "border-box",
-            backgroundColor: INK,
-            backgroundImage: "repeating-linear-gradient(-45deg, #2b2b2b 0 8px, transparent 8px 16px)",
-            backgroundPosition: stripes,
-            width,
-          }}
-        />
+        <Pixels time={time} live={live} />
       </div>
     </motion.div>
+  );
+}
+
+// ---------- la barra a pixel ----------
+// Una fila di blocchetti quadrati (stile 8-bit) che si accendono uno dopo l'altro. Il blocchetto di testa lampeggia
+// e un pixel corallo corre sopra quelli accesi; a barra piena continua a correre avanti e indietro (orologio libero).
+const CELLS = 28;
+
+function PixelCell({ time, live, i }: { time: Time; live: Time; i: number }) {
+  const backgroundColor = useTransform([time, live], ([t, l]: number[]) => {
+    const filled = (clamp01(t / BAR_SECONDS) * CELLS) > i;
+    if (!filled) return "rgba(0,0,0,0.1)";
+    // pixel corallo che corre su e giù per la fila (ping-pong)
+    const span = CELLS + 6;
+    const x = ((l * 16) % (span * 2));
+    const pos = (x < span ? x : span * 2 - x) - 3;
+    return Math.abs(pos - i) < 1.2 ? "var(--color-accent)" : "#161616";
+  });
+  const opacity = useTransform([time, live], ([t, l]: number[]) => {
+    const f = clamp01(t / BAR_SECONDS) * CELLS;
+    // il blocchetto di testa (quello che si sta riempiendo) lampeggia finché non è acceso del tutto
+    return f > i && f < i + 1 && t < BAR_SECONDS ? (Math.floor(l * 9) % 2 === 0 ? 1 : 0.35) : 1;
+  });
+  return <motion.i style={{ display: "block", flex: 1, height: "100%", backgroundColor, opacity }} />;
+}
+
+function Pixels({ time, live }: { time: Time; live: Time }) {
+  return (
+    <div style={{ display: "flex", gap: 2, height: "100%", padding: 3, boxSizing: "border-box" }}>
+      {Array.from({ length: CELLS }, (_, i) => (
+        <PixelCell key={i} time={time} live={live} i={i} />
+      ))}
+    </div>
   );
 }
 
@@ -518,6 +540,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const total = useMotionValue(0); // numero vero di segnali raccolti (0 finché la risposta non arriva)
   const [signals, setSignals] = useState<SignalsState>("loading");
   const [windowText, setWindowText] = useState(""); // es. "negli ultimi 15 minuti"
+  const [windows, setWindows] = useState<{ seconds: number; count: number }[]>([]); // conteggi veri per finestra, in ordine misto
   const [items, setItems] = useState<Signal[]>([]); // gli ultimi contenuti veri, uno per formato (vuoto se il database non risponde)
   const rootRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<AnimationPlaybackControls | null>(null);
@@ -550,10 +573,10 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("risposta non valida"))))
       .then((data: Partial<SignalsResponse>) => {
         if (typeof data.count !== "number") throw new Error("numero mancante");
-        // il contatore mostra i segnali arrivati nella finestra più stretta che ne ha almeno uno;
-        // se negli ultimi 7 giorni non ne è arrivato nessuno, dice 0 (vero) su quei 7 giorni
-        total.set(data.recent?.count ?? 0);
-        setWindowText(windowLabel(data.recent?.seconds ?? 604800));
+        if (!Array.isArray(data.windows) || data.windows.length === 0) throw new Error("finestre mancanti");
+        setWindows(data.windows);
+        total.set(data.windows[0].count);
+        setWindowText(windowLabel(data.windows[0].seconds));
         setItems(Array.isArray(data.items) ? data.items : []);
         setSignals("ok");
       })
@@ -562,6 +585,18 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       });
     return () => request.abort();
   }, [total]);
+
+  // il contatore cambia finestra ogni 3,5 secondi (5 min, 3 ore, 30 min…): il numero scorre al nuovo valore
+  useEffect(() => {
+    if (windows.length < 2) return;
+    let i = 0;
+    const id = window.setInterval(() => {
+      i = (i + 1) % windows.length;
+      setWindowText(windowLabel(windows[i].seconds));
+      animate(total, windows[i].count, { duration: reduce ? 0 : 0.7, ease: "easeOut" });
+    }, 3500);
+    return () => window.clearInterval(id);
+  }, [windows, total, reduce]);
 
   // orologio libero: avanza sempre, anche quando time aspetta il tocco. Con "Riduci movimento" resta fermo.
   useEffect(() => {

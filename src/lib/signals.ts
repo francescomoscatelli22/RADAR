@@ -15,8 +15,9 @@ export type Signal = {
   comments?: number; // solo thread
 };
 
-// Finestre di tempo provate dalla più stretta alla più larga (in secondi).
-export const RECENT_WINDOWS = [30, 60, 300, 900, 1800, 3600, 10800, 86400, 604800] as const;
+// Finestre di tempo del contatore dell'intro (in secondi), apposta in ordine MISTO e non crescente:
+// 3 ore, 30 min, 24 ore, 15 min, 5 ore, 1 ora, 12 ore (niente 5 min: troppo spesso vuoto). Il contatore le mostra una dopo l'altra.
+export const RECENT_WINDOWS = [10800, 1800, 86400, 900, 18000, 3600, 43200] as const;
 
 export function windowLabel(seconds: number) {
   if (seconds < 60) return `negli ultimi ${seconds} secondi`;
@@ -33,9 +34,9 @@ export function windowLabel(seconds: number) {
 }
 
 export type SignalsResponse = {
-  // Segnali VERI arrivati in Radar (colonna created_at = quando sono stati raccolti) nella
-  // finestra più stretta che ne contiene almeno uno. null se nessuno è arrivato negli ultimi 7 giorni.
-  recent: { count: number; seconds: number } | null;
+  // Segnali VERI pubblicati (colonna published_at = quando il contenuto è uscito, non quando è stato raccolto) in ogni
+  // finestra di RECENT_WINDOWS, nello stesso ordine. Le finestre che non si sono potute contare mancano.
+  windows: { seconds: number; count: number }[];
   count: number; // quanti contenuti ha raccolto Radar in totale
   items: Signal[]; // gli ultimi contenuti veri di tutti i formati, dal più recente (max 2 per formato)
 };

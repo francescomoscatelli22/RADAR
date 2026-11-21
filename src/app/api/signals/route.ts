@@ -62,7 +62,13 @@ export async function GET() {
   const windowCounts = Promise.all(
     RECENT_WINDOWS.map(async (seconds) => {
       const since = new Date(now - seconds * 1000).toISOString();
-      const res = await db.from("items").select("id", { count: "exact", head: true }).gte("created_at", since);
+      // si conta per data di PUBBLICAZIONE (quando il contenuto è uscito davvero), non per data di raccolta:
+      // altrimenti un caricamento in blocco dell'archivio sembrerebbe "N segnali negli ultimi 5 minuti"
+      const res = await db
+        .from("items")
+        .select("id", { count: "exact", head: true })
+        .gte("published_at", since)
+        .lte("published_at", new Date(now).toISOString());
       return { seconds, count: res.error ? null : (res.count ?? 0) };
     }),
   );
@@ -101,10 +107,9 @@ export async function GET() {
     if (items.length === 6) break;
   }
 
-  // la finestra più stretta con almeno un segnale (le finestre sono in ordine crescente)
-  const hit = windows.find((w) => (w.count ?? 0) > 0);
-  const recent = hit ? { count: hit.count as number, seconds: hit.seconds } : null;
+  // solo le finestre contate davvero (se una lettura è fallita, si salta: mai numeri inventati)
+  const counted = windows.flatMap((w) => (w.count === null ? [] : [{ seconds: w.seconds, count: w.count }]));
 
-  const body: SignalsResponse = { recent, count: total.count, items };
+  const body: SignalsResponse = { windows: counted, count: total.count, items };
   return Response.json(body, { headers: { "Cache-Control": "no-store" } });
 }
