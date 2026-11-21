@@ -46,4 +46,14 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ingest.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"
+        # GitHub ogni tanto risponde con un errore: un solo errore spezzerebbe la catena,
+        # quindi si riprova fino a 3 volte, a 20 secondi di distanza
+        run: |
+          for try in 1 2 3; do
+            if gh workflow run ingest.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"; then
+              exit 0
+            fi
+            echo "Rilancio fallito (tentativo $try di 3)"
+            [ "$try" -lt 3 ] && sleep 20
+          done
+          exit 1
