@@ -8,6 +8,7 @@ import {
   Unbounded,
 } from "next/font/google";
 import AppBoot from "@/components/AppBoot";
+import RegisterSW from "@/components/RegisterSW";
 import SyncAgent from "@/components/SyncAgent";
 import "./globals.css";
 
@@ -53,7 +54,10 @@ const instrument = Instrument_Serif({
 
 export const metadata: Metadata = {
   title: "Radar",
-  description: "Un radar personale per sbirciare il web",
+  description: "Il radar personale che capta le novità sull'intelligenza artificiale.",
+  // su iPhone, aggiunta alla Home: si apre a schermo intero con la barra di stato trasparente
+  appleWebApp: { capable: true, title: "Radar", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
   icons: {
     icon: [
       { url: "/icons/icon.svg", type: "image/svg+xml" },
@@ -66,6 +70,7 @@ export const metadata: Metadata = {
 // viewportFit "cover" serve a far funzionare i margini di sicurezza dell'iPhone (notch, barra in basso)
 export const viewport: Viewport = {
   themeColor: "#141414",
+  colorScheme: "dark",
   viewportFit: "cover",
 };
 
@@ -77,6 +82,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <SyncAgent />
+        <RegisterSW />
         <AppBoot>{children}</AppBoot>
       </body>
     </html>

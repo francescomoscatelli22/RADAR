@@ -2,11 +2,17 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Radar",
     short_name: "Radar",
-    description: "Un radar personale per sbirciare il web",
+    description: "Il radar personale che capta le novità sull'intelligenza artificiale.",
+    lang: "it",
+    dir: "ltr",
     start_url: "/",
+    scope: "/",
     display: "standalone",
+    orientation: "portrait",
+    categories: ["news", "productivity"],
     background_color: "#141414",
     theme_color: "#141414",
     icons: [
@@ -18,6 +24,11 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/png",
         purpose: "maskable",
       },
+    ],
+    // scorciatoie tenendo premuta l'icona (Android/desktop)
+    shortcuts: [
+      { name: "Seguiti", url: "/seguiti" },
+      { name: "Salvati", url: "/salvati" },
     ],
   };
 }
