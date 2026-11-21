@@ -679,14 +679,101 @@
   letter-spacing: -0.02em;
 }
 
+/* il blocco "respira": oscilla piano e ogni tanto lo attraversa un lampo di luce */
+.splash-title {
+  animation: sp-title-sway 4.2s 1.6s ease-in-out infinite alternate;
+}
+
+.splash-title::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.6), transparent);
+  transform: translateX(-160%) skewX(-18deg);
+  animation: sp-shine 3.6s 2.4s ease-in-out infinite;
+}
+
+@keyframes sp-title-sway {
+  from {
+    transform: rotate(-1.5deg);
+  }
+  to {
+    transform: rotate(-0.2deg) translateY(calc(var(--u) * -2));
+  }
+}
+
+@keyframes sp-shine {
+  0% {
+    transform: translateX(-160%) skewX(-18deg);
+  }
+  45%,
+  100% {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
+/* le lettere salgono una alla volta; poi, a onda, ognuna fa un saltello e un piccolo inchino, a ripetizione */
 .splash-title span {
   display: inline-block;
-  animation: sp-rise 0.55s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+  animation:
+    sp-rise 0.55s cubic-bezier(0.2, 0.9, 0.2, 1) backwards,
+    sp-hop 3.6s var(--hop, 2.6s) cubic-bezier(0.3, 1.6, 0.5, 1) infinite;
 }
 
 @keyframes sp-rise {
   from {
     transform: translateY(110%);
+  }
+}
+
+@keyframes sp-hop {
+  0% {
+    transform: translateY(0) rotate(0) scale(1);
+  }
+  9% {
+    transform: translateY(calc(var(--u) * -5)) rotate(-7deg) scale(1.14);
+  }
+  18%,
+  100% {
+    transform: translateY(0) rotate(0) scale(1);
+  }
+}
+
+/* LIVE: il pallino lampeggia come una spia accesa */
+.splash-live i {
+  animation: sp-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes sp-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
+/* il pallino del radar che prende il colore della card: un anello colorato si allarga e svanisce */
+.splash-blip {
+  transition: fill 0.35s ease-out;
+}
+
+.splash-flash {
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+  animation: sp-flash 1.1s ease-out forwards;
+}
+
+@keyframes sp-flash {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.4);
   }
 }
 
@@ -742,7 +829,7 @@
   border: calc(var(--u) * 2.5) solid var(--color-cream);
   border-radius: 999px;
   background: var(--color-surface);
-  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-accent);
+  box-shadow: calc(var(--u) * 4) calc(var(--u) * 4) 0 var(--color-card-audio); /* verde, non rosso */
   font-family: var(--font-martian), ui-monospace, monospace;
   font-weight: 600;
   font-size: calc(var(--u) * 11);
@@ -759,7 +846,7 @@
   width: calc(var(--u) * 9);
   height: calc(var(--u) * 9);
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--color-card-audio); /* il pallino è verde, come l'ombra */
 }
 
 .splash:not([data-stage="intro"]) .splash-hint {
@@ -844,6 +931,12 @@
   color: var(--color-card-ink);
 }
 
+.splash-btn-github {
+  --shadow: var(--color-signal);
+  background: var(--color-surface);
+  color: var(--color-cream);
+}
+
 /* I pulsanti entrano uno dopo l'altro quando si passa alla fase "menu" */
 .splash:not([data-stage="intro"]) .splash-btn {
   animation: sp-fade-up 0.45s var(--d, 0s) cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
@@ -876,13 +969,16 @@
   animation: sp-tape-in 0.5s 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
 }
 
+/* le due strisce partono separate a sinistra (si leggono entrambe) e si incrociano solo verso la fine, a destra */
 .splash-tape-a {
-  --tr: -3deg;
+  --tr: -4deg;
+  top: calc(var(--u) * 795);
   background: var(--color-cream);
 }
 
 .splash-tape-b {
-  --tr: 3.5deg;
+  --tr: 4deg;
+  top: calc(var(--u) * 750);
   background: var(--color-accent);
 }
 

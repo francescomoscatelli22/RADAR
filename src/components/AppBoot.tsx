@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { signInWithGoogle, useAuth } from "@/lib/auth";
-import { useRadar } from "@/lib/store";
+import { PROVIDER_NAME, signInWithProvider, signOut, useAuth, type OAuthProvider } from "@/lib/auth";
+import { radar, useRadar } from "@/lib/store";
 import Intro from "./intro/Intro";
 import Splash, { type Stage } from "./splash/Splash";
 
@@ -15,7 +15,7 @@ type Boot = "loading" | "revealing" | "done";
  * Apertura di Radar. Si vede solo aprendo l'app dalla home ("/").
  *  0. caricamento: poster giallo animato con la barra, poi lo strappo a strisce scopre la schermata iniziale
  *  1. intro: animazione radar in loop, senza fine, finché l'utente non tocca lo schermo
- *  2. menu: compaiono i tre pulsanti (Accedi, Registrati, Continua con Google)
+ *  2. menu: compaiono i pulsanti (Accedi, Registrati, Continua con Google, Continua con GitHub)
  *  3. leaving: scelta una pagina, il foro circolare si apre e la scopre
  * Chi ha già scelto gli argomenti (o ha un account) non vede la schermata iniziale: lo strappo scopre subito il feed.
  * Il layout resta montato tra le pagine, quindi non ricompare finché non si ricarica l'app.
@@ -29,17 +29,40 @@ export default function AppBoot({ children }: { children: ReactNode }) {
   const [boot, setBoot] = useState<Boot>(pathname === "/" ? "loading" : "done");
   const [note, setNote] = useState<string | null>(null);
 
-  const returning = topics !== null || user !== null;
+  // Solo in sviluppo: "/?splash=1" forza la schermata iniziale anche se gli argomenti sono già scelti
+  // (serve a rivederla mentre si rifinisce il design; nella versione di produzione non esiste).
+  // Si legge solo quando l'intro finisce, mai nel primo disegno della pagina: niente differenze tra server e browser.
+  const forceSplash =
+    process.env.NODE_ENV !== "production" &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("splash");
+  const returning = !forceSplash && (topics !== null || user !== null);
+
+  // Solo in sviluppo: dentro la cornice del telefono (design/phone-preview.html) nasconde la barra di scorrimento del computer
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production" && window.self !== window.top) {
+      document.documentElement.classList.add("in-phone-frame");
+    }
+  }, []);
+
+  // Solo in sviluppo: "/?fresh=1" azzera argomenti, seguiti e salvati di questo dispositivo ed esce dall'account,
+  // come per chi apre Radar la prima volta (con un account attivo la schermata iniziale non compare).
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).has("fresh")) {
+      radar.reset();
+      void signOut();
+    }
+  }, []);
 
   const choose = (href: string) => {
     setPhase("leaving");
     router.push(href);
   };
 
-  // Google funziona solo se Supabase e Google Cloud sono collegati: altrimenti lo diciamo chiaramente
-  const google = async () => {
-    const res = await signInWithGoogle();
-    if (!res.ok) setNote("Google arriva presto: va ancora collegato l'accesso.");
+  // Google e GitHub funzionano solo se Supabase e il provider sono collegati: altrimenti lo diciamo chiaramente
+  const social = async (provider: OAuthProvider) => {
+    const res = await signInWithProvider(provider);
+    if (!res.ok) setNote(`${PROVIDER_NAME[provider]} arriva presto: va ancora collegato l'accesso.`);
   };
 
   return (
@@ -52,7 +75,7 @@ export default function AppBoot({ children }: { children: ReactNode }) {
           note={note}
           onStart={() => setPhase("menu")}
           onChoose={choose}
-          onGoogle={google}
+          onSocial={social}
           onExited={() => setPhase("gone")}
         />
       )}

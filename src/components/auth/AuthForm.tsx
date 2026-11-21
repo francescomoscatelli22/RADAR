@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authErrorMessage, signInWithGoogle, useAuth } from "@/lib/auth";
+import { authErrorMessage, PROVIDER_NAME, signInWithProvider, useAuth, type OAuthProvider } from "@/lib/auth";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useRadar } from "@/lib/store";
 import Button from "@/components/ui/Button";
@@ -35,7 +35,7 @@ const COPY = {
 const FIELD =
   "h-12 w-full border-[3px] border-cream bg-surface px-3 font-display text-base text-cream placeholder:text-cream-2/70 aria-[invalid=true]:border-accent";
 
-/** Modulo di accesso e di registrazione (email e password, più Google). */
+/** Modulo di accesso e di registrazione (email e password, più Google e GitHub). */
 export default function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const { configured } = useAuth();
@@ -80,10 +80,10 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     }
   };
 
-  const google = async () => {
+  const social = async (provider: OAuthProvider) => {
     setError(null);
-    const res = await signInWithGoogle();
-    if (!res.ok) setError("Google non è ancora collegato: usa email e password.");
+    const res = await signInWithProvider(provider);
+    if (!res.ok) setError(`${PROVIDER_NAME[provider]} non è ancora collegato: usa email e password.`);
   };
 
   return (
@@ -193,8 +193,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           </div>
 
           <div className="flex flex-col gap-3">
-            <Button variant="secondary" full onClick={google} disabled={!configured}>
+            <Button variant="secondary" full onClick={() => social("google")} disabled={!configured}>
               Continua con Google
+            </Button>
+            <Button variant="secondary" full onClick={() => social("github")} disabled={!configured}>
+              Continua con GitHub
             </Button>
             <Button variant="ghost" full onClick={() => router.replace(topics === null ? "/argomenti" : "/")}>
               Continua senza account

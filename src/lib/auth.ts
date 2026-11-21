@@ -59,15 +59,24 @@ export function authErrorMessage(message: string | undefined) {
   return "Qualcosa è andato storto. Riprova.";
 }
 
-export async function signInWithGoogle() {
+/** Le app con cui si può accedere. Per aggiungerne una: qui, il provider in Supabase e un pulsante. */
+export type OAuthProvider = "google" | "github";
+
+export const PROVIDER_NAME: Record<OAuthProvider, string> = { google: "Google", github: "GitHub" };
+
+/** Accesso con un'app esterna: il browser va dal provider e poi torna a Radar già con l'account. */
+export async function signInWithProvider(provider: OAuthProvider) {
   const db = supabaseBrowser();
   if (!db) return { ok: false as const, reason: "not-configured" as const };
   const { error } = await db.auth.signInWithOAuth({
-    provider: "google",
+    provider,
     options: { redirectTo: `${window.location.origin}/` },
   });
   return error ? { ok: false as const, reason: "error" as const, message: error.message } : { ok: true as const };
 }
+
+export const signInWithGoogle = () => signInWithProvider("google");
+export const signInWithGitHub = () => signInWithProvider("github");
 
 export async function signOut() {
   await supabaseBrowser()?.auth.signOut();

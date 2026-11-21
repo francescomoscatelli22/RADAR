@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, type AnimationEvent, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type AnimationEvent, type CSSProperties } from "react";
 import SignalCard from "./SignalCard";
-import { CATEGORIES_A, CATEGORIES_B } from "./news";
+import { useOpeningCategories } from "./news";
 import CodeRain from "./CodeRain";
 import { ARM_ANGLE, passDelay, u } from "./geometry";
 import "./splash.css";
@@ -150,22 +150,41 @@ function GoogleLogo() {
   );
 }
 
+// Logo di GitHub (Octocat, in tinta col testo)
+function GitHubLogo() {
+  return (
+    <svg viewBox="0 0 16 16" width={u(22)} height={u(22)} aria-hidden="true" focusable="false" fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
+
 export default function Splash({
   stage,
   note,
   onStart,
   onChoose,
-  onGoogle,
+  onSocial,
   onExited,
 }: {
   stage: Stage;
   note: string | null; // messaggio breve sotto i pulsanti (es. Google non ancora collegato)
   onStart: () => void;
   onChoose: (href: string) => void;
-  onGoogle: () => void;
+  onSocial: (provider: "google" | "github") => void;
   onExited: () => void;
 }) {
   const [tick, setTick] = useState(0);
+  // colore dei pallini del radar: a ogni nuova card ne prende il colore uno diverso, a turno (n serve a rilanciare l'anello)
+  const [tints, setTints] = useState<({ color: string; n: number } | null)[]>(() => BLIPS.map(() => null));
+  const tintBlip = (n: number, color: string) => {
+    const target = n % BLIPS.length;
+    setTints((prev) => prev.map((t, i) => (i === target ? { color, n } : t)));
+  };
+  // le due strisce in fondo: i settori AI mescolati a ogni apertura, divisi in due liste senza voci in comune
+  const opening = useOpeningCategories();
+  const tapeA = useMemo(() => opening.filter((_, i) => i % 2 === 0), [opening]);
+  const tapeB = useMemo(() => opening.filter((_, i) => i % 2 === 1), [opening]);
 
   useEffect(() => {
     if (!SHOW_PHRASES) return; // frasi spente: niente timer inutile
@@ -294,7 +313,7 @@ export default function Splash({
                       cy={b.y}
                       r={19}
                       fill="none"
-                      stroke="var(--color-accent)"
+                      stroke={tints[i]?.color ?? "var(--color-accent)"}
                       strokeWidth="2.5"
                       style={{ animationDelay: `${b.delay}s`, animationDuration: `${b.pingDur}s` }}
                     />
@@ -304,11 +323,24 @@ export default function Splash({
                     cx={b.x}
                     cy={b.y}
                     r={8}
-                    fill="var(--color-accent)"
+                    fill={tints[i]?.color ?? "var(--color-accent)"}
                     stroke="var(--color-cream)"
                     strokeWidth="2.5"
                     style={{ animationDelay: `${b.delay}s` }}
                   />
+                  {/* a ogni nuova card, il pallino scelto lancia un anello del colore della card */}
+                  {tints[i] && (
+                    <circle
+                      key={tints[i].n}
+                      className="splash-flash"
+                      cx={b.x}
+                      cy={b.y}
+                      r={9}
+                      fill="none"
+                      stroke={tints[i].color}
+                      strokeWidth="4"
+                    />
+                  )}
                 </g>
               ))}
               {/* il puntino al centro resta fermo, ma pulsa */}
@@ -325,8 +357,8 @@ export default function Splash({
 
           </div>
 
-          {/* ---------- una sola card in evidenza, che cambia ogni 2 secondi ---------- */}
-          <SignalCard />
+          {/* ---------- una sola card in evidenza, che cambia ogni 3,5 secondi ---------- */}
+          <SignalCard onShow={tintBlip} />
 
           <span className="splash-live" style={stickerStyle(344, 66, -5, 0.5)}>
             <i /> LIVE
@@ -335,7 +367,7 @@ export default function Splash({
           {/* ---------- titolo ---------- */}
           <div className="splash-title" aria-hidden="true">
             {WORD.map((ch, i) => (
-              <span key={i} style={{ animationDelay: `${0.8 + i * 0.07}s` }}>
+              <span key={i} style={{ animationDelay: `${0.8 + i * 0.07}s, ${2.6 + i * 0.12}s` }}>
                 {ch}
               </span>
             ))}
@@ -387,19 +419,29 @@ export default function Splash({
               className="splash-btn splash-btn-google"
               style={{ "--d": "0.3s", top: u(536) } as CSSProperties}
               tabIndex={menu ? 0 : -1}
-              onClick={onGoogle}
+              onClick={() => onSocial("google")}
             >
               <GoogleLogo />
               Continua con Google
             </button>
-            <p className="splash-note" role="status" style={{ top: u(604) }}>
+            <button
+              type="button"
+              className="splash-btn splash-btn-github"
+              style={{ "--d": "0.4s", top: u(614) } as CSSProperties}
+              tabIndex={menu ? 0 : -1}
+              onClick={() => onSocial("github")}
+            >
+              <GitHubLogo />
+              Continua con GitHub
+            </button>
+            <p className="splash-note" role="status" style={{ top: u(684) }}>
               {note}
             </p>
           </div>
 
           {/* ---------- nastri incrociati ---------- */}
-          <Tape items={CATEGORIES_B} className="splash-tape-b" seconds={Math.round(CATEGORIES_B.length * 4.2)} />
-          <Tape items={CATEGORIES_A} className="splash-tape-a" seconds={Math.round(CATEGORIES_A.length * 4.2)} />
+          <Tape items={tapeB} className="splash-tape-b" seconds={Math.round(tapeB.length * 4.2)} />
+          <Tape items={tapeA} className="splash-tape-a" seconds={Math.round(tapeA.length * 4.2)} />
         </div>
       </div>
     </div>
