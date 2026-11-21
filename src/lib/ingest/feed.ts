@@ -153,7 +153,9 @@ export function parseFeed(xml: string, platform: Platform): RawItem[] {
   else throw new Error("Formato feed non riconosciuto (né RSS né Atom)");
 
   return entries
-    .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((e) => parseEntry(e, platform))
-    .filter((i): i is RawItem => i !== null);
+    .filter((i): i is RawItem => i !== null)
+    // PyTorch pubblica decine di tag tecnici ("ciflow/...", "trunk/...") al giorno: non sono release vere e sommergono il feed
+    .filter((i) => !(platform === "github" && /^(ciflow|trunk)\//i.test(i.title)))
+    .slice(0, MAX_ITEMS_PER_SOURCE);
 }

@@ -1,8 +1,75 @@
 @import "tailwindcss";
 @import "../design/tokens.css";
 
+/* L'app è scura (Zine · Scuro). Intro e splash hanno i loro sfondi sopra a questo. */
+html {
+  background: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--color-bg);
+  color: var(--color-cream);
   font-family: var(--font-bricolage), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* focus visibile per chi usa la tastiera (mai tolto: serve all'accessibilità) */
+:where(a, button, input, [role="button"], [role="tab"]):focus-visible {
+  outline: 3px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+/* barre di scorrimento nascoste per le file orizzontali di chip */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* scheletro di caricamento: un riflesso che scorre (fermo con "Riduci movimento") */
+@keyframes radar-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(100deg, var(--color-surface) 30%, var(--color-surface-2) 50%, var(--color-surface) 70%);
+  background-size: 200% 100%;
+  animation: radar-shimmer 1.6s linear infinite;
+}
+
+/* entrata delle card: sale di poco e appare (solo se il movimento è consentito) */
+@keyframes radar-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: radar-rise 0.28s ease-out both;
+}
+
+/* mezzatinta (puntini) usata sulle anteprime dei video */
+.halftone {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.35) 1px, transparent 1.4px);
+  background-size: 5px 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .rise {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
 }

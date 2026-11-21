@@ -34,6 +34,22 @@
   --color-platform-post: #2f6bff;
 
   --border-zine: 3px;
+
+  /* ombre dure zine: non sfumate, spostate in basso a destra */
+  --shadow-zine: 4px 4px 0 var(--color-cream);
+  --shadow-zine-sm: 2px 2px 0 var(--color-cream);
+  --shadow-zine-accent: 4px 4px 0 var(--color-accent);
+  --shadow-zine-ink: 4px 4px 0 var(--color-card-ink);
+
+  /* ritmo di spaziatura: 4/8 px (usato dai componenti dell'app) */
+  --gutter: 16px;
+}
+
+/* margini di sicurezza dell'iPhone (notch in alto, barra Home in basso) */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-h: 64px; /* altezza della barra in basso, senza il margine di sicurezza */
 }
 
 /* I font arrivano da next/font (vedi layout.tsx) tramite queste variabili */
