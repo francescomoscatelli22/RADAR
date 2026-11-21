@@ -35,38 +35,41 @@ export const POOL: Item[] = [
   { id: "art-3", type: "article", tag: "ARTICOLO · ETICA · 6 H", title: "AI generativa e copyright: cosa sta cambiando", excerpt: "Le regole nuove, caso per caso." },
 ];
 
-// Categorie per i due nastri scorrevoli in fondo: sono i temi che l'utente sceglierà
-// alla registrazione. Due liste senza voci in comune, così i nastri non si ripetono mai uguali.
-export const CATEGORIES_A: string[] = [
-  "AI",
-  "AI generativa",
-  "Immagini",
-  "Video",
-  "3D e scene",
-  "UI / UX",
-  "Agenti",
-  "Modelli linguistici",
-  "Prompt design",
-  "Strumenti",
-  "Open source",
-  "Audio e voce",
-  "Codice",
-  "Robotica",
-];
+// Categorie dei due nastri in fondo: sono TUTTI i settori dell'AI, letti dallo stesso elenco
+// che usa la raccolta (scripts/seed/topics.json). Una sola fonte di verità: se aggiungi un
+// settore lì, compare anche qui. Si mescolano le aree (generativa, tecnologia, settori…)
+// e si dividono in due liste senza voci in comune.
+import topicsData from "../../../scripts/seed/topics.json";
 
-export const CATEGORIES_B: string[] = [
-  "Etica e regole",
-  "Ricerca",
-  "Nuovi modelli",
-  "Design e AI",
-  "Creatività",
-  "Musica generativa",
-  "Sicurezza",
-  "Lavoro e AI",
-  "Dati e privacy",
-  "Chip e hardware",
-  "Tutorial",
-  "Educazione",
-  "No-code",
-  "Diffusione",
-];
+type SeedTopic = { slug: string; label: string; parent_slug: string | null; sort_order: number; keywords: string[] };
+const ALL = topicsData as SeedTopic[];
+
+function areaOf(t: SeedTopic): string {
+  let cur = t;
+  while (cur.parent_slug && cur.parent_slug !== "ai") {
+    const parent = ALL.find((x) => x.slug === cur.parent_slug);
+    if (!parent) break;
+    cur = parent;
+  }
+  return cur.slug;
+}
+
+function interleavedLabels(): string[] {
+  const areas = new Map<string, string[]>();
+  for (const t of [...ALL].sort((a, b) => a.sort_order - b.sort_order)) {
+    if (t.slug === "ai") continue; // la radice "AI" è il tutto, non una categoria
+    if (t.keywords.length === 0) continue; // i contenitori ("Dove", "Settori e applicazioni"…) non sono categorie da leggere
+    const key = areaOf(t);
+    areas.set(key, [...(areas.get(key) ?? []), t.label]);
+  }
+  const lists = [...areas.values()];
+  const out: string[] = [];
+  for (let i = 0; lists.some((l) => i < l.length); i++) {
+    for (const l of lists) if (i < l.length) out.push(l[i]);
+  }
+  return out;
+}
+
+const LABELS = interleavedLabels();
+export const CATEGORIES_A: string[] = LABELS.filter((_, i) => i % 2 === 0);
+export const CATEGORIES_B: string[] = LABELS.filter((_, i) => i % 2 === 1);

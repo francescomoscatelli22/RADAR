@@ -398,8 +398,8 @@ export default function Splash({
           </div>
 
           {/* ---------- nastri incrociati ---------- */}
-          <Tape items={CATEGORIES_B} className="splash-tape-b" seconds={55} />
-          <Tape items={CATEGORIES_A} className="splash-tape-a" seconds={60} />
+          <Tape items={CATEGORIES_B} className="splash-tape-b" seconds={Math.round(CATEGORIES_B.length * 4.2)} />
+          <Tape items={CATEGORIES_A} className="splash-tape-a" seconds={Math.round(CATEGORIES_A.length * 4.2)} />
         </div>
       </div>
     </div>
