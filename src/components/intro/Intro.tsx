@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { animate, motion, useMotionValue, useTransform } from "motion/react";
+import type { Signal, SignalsResponse } from "@/lib/signals";
 import Tiles from "./tiles";
 import {
   ACCENT_SERIF,
@@ -25,17 +26,19 @@ import {
 } from "./timeline";
 
 /*
-  Intro animata di Radar: un POSTER GIALLO da 5 secondi (la barra di caricamento), poi tre strisce
+  Intro animata di Radar: un POSTER GIALLO da 8,5 secondi (la barra di caricamento), poi tre strisce
   colorate lo "strappano" via e scoprono la schermata iniziale (Splash, scura, con il radar).
   Apposta è l'opposto dello Splash: fondo giallo pieno, niente radar, scritte giganti.
 
   Cosa si vede (il tempo è quello dell'orologio unico `time`):
     0,2 – 1,0 s  le parole "L'AI / CHE / CONTA." salgono una alla volta, parte il contatore
-    1,0 – 3,2 s  i 6 formati del feed arrivano dai lati come adesivi, ognuno con la sua micro-animazione
-    4,3 s        adesivo "SI PARTE!"
-    5,0 – 6,0 s  strappo a strisce → schermata iniziale
+    1,0 – 5,0 s  i 6 formati del feed arrivano dai lati come adesivi, uno ogni 0,7 s, ognuno con la sua micro-animazione
+    7,4 s        adesivo "SI PARTE!"
+    8,5 – 9,5 s  strappo a strisce → schermata iniziale
 
-  Il contatore e la barra sono grafica: non misurano un vero caricamento (per ora non c'è niente da caricare).
+  Contatore e blocchi mostrano dati VERI (quanti contenuti ha raccolto Radar e gli ultimi per formato,
+  da /api/signals): se il database non risponde, il contatore dice "—" e i blocchi non compaiono.
+  Solo la barra è grafica: è a tempo fisso.
 */
 
 // temi del nastro (decorativi: l'intro non dipende dai dati dello Splash)
@@ -128,15 +131,24 @@ function Phrase({ time, instant }: { time: Time; instant: boolean }) {
         y,
       }}
     >
-      segnali dal web, scelti da te.
+      il tuo radar sull&apos;AI.
     </motion.p>
   );
 }
 
-// ---------- contatore "segnali in arrivo": adesivo nero accanto a "L'AI" ----------
-function Counter({ time }: { time: Time }) {
-  const n = useTransform(time, (t) => String(Math.round(128 * easeOut(clamp01((t - 0.9) / 2.7)))));
+// ---------- contatore "segnali rilevati": adesivo nero accanto a "L'AI" ----------
+// Il numero è VERO: quanti contenuti ha raccolto Radar finora (letti dal database tramite /api/signals).
+// Sale da 0 al totale durante il caricamento. Se il database non risponde, mostra "—" invece di inventare.
+type SignalsState = "loading" | "ok" | "error";
+
+function Counter({ time, total, state }: { time: Time; total: Time; state: SignalsState }) {
+  const n = useTransform([time, total], ([t, tot]: number[]) => {
+    const p = clamp01((t - 0.9) / 6.5);
+    return String(Math.round(tot * (1 - (1 - p) * (1 - p))));
+  });
   const scale = useTransform(time, (t) => backOut(clamp01((t - 0.8) / 0.5)));
+  // se i segnali superano 9999 il numero si rimpicciolisce per restare dentro l'adesivo
+  const numberSize = useTransform(total, (v) => (v >= 10000 ? 34 : 44));
   return (
     <motion.div
       style={{
@@ -159,17 +171,17 @@ function Counter({ time }: { time: Time }) {
         style={{
           fontFamily: DISPLAY,
           fontWeight: 800,
-          fontSize: 44,
+          fontSize: numberSize,
           lineHeight: 0.9,
           letterSpacing: "-0.05em",
           color: YELLOW,
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        {n}
+        {state === "error" ? "—" : n}
       </motion.b>
       <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 8.5, lineHeight: 1.1, letterSpacing: "0.12em" }}>
-        SEGNALI IN ARRIVO
+        SEGNALI RILEVATI
       </span>
     </motion.div>
   );
@@ -237,7 +249,7 @@ function Tape({ time }: { time: Time }) {
 
 // ---------- adesivo "SI PARTE!" sul blocco CONTA. ----------
 function GoSticker({ time }: { time: Time }) {
-  const p = (t: number) => backOut(clamp01((t - 4.3) / 0.45));
+  const p = (t: number) => backOut(clamp01((t - (BAR_SECONDS - 1.1)) / 0.45));
   const scale = useTransform(time, (t) => p(t));
   const rotate = useTransform(time, (t) => -8 + 24 * (1 - p(t)));
   return (
@@ -271,8 +283,9 @@ function GoSticker({ time }: { time: Time }) {
 // ---------- barra di caricamento: 5 secondi esatti ----------
 const STATUS = [
   { from: 0, text: "CAPTO SEGNALI…" },
-  { from: 0.34, text: "ORDINO IL FEED…" },
-  { from: 0.67, text: "QUASI FATTO…" },
+  { from: 0.25, text: "LEGGO LE FONTI…" },
+  { from: 0.5, text: "ORDINO IL FEED…" },
+  { from: 0.78, text: "QUASI FATTO…" },
   { from: 1, text: "PRONTO" },
 ];
 
@@ -377,6 +390,9 @@ function usePrefersReducedMotion() {
 export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDone: () => void }) {
   const reduce = usePrefersReducedMotion();
   const time = useMotionValue(0);
+  const total = useMotionValue(0); // numero vero di segnali raccolti (0 finché la risposta non arriva)
+  const [signals, setSignals] = useState<SignalsState>("loading");
+  const [items, setItems] = useState<Signal[]>([]); // gli ultimi contenuti veri, uno per formato (vuoto se il database non risponde)
   const rootRef = useRef<HTMLDivElement>(null);
   const geometry = useRef({ w: ART_W, h: ART_H });
   const [scale, setScale] = useState(0); // 0 = non ancora misurato (resta nascosto)
@@ -394,6 +410,23 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // legge dal database quanti segnali ci sono davvero
+  useEffect(() => {
+    const request = new AbortController();
+    fetch("/api/signals", { signal: request.signal, cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("risposta non valida"))))
+      .then((data: Partial<SignalsResponse>) => {
+        if (typeof data.count !== "number") throw new Error("numero mancante");
+        total.set(data.count);
+        setItems(Array.isArray(data.items) ? data.items : []);
+        setSignals("ok");
+      })
+      .catch(() => {
+        if (!request.signal.aborted) setSignals("error");
+      });
+    return () => request.abort();
+  }, [total]);
 
   const handleReveal = useEffectEvent(onReveal);
   const handleDone = useEffectEvent(onDone);
@@ -484,9 +517,9 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
           <Phrase time={time} instant={reduce} />
           {!reduce && (
             <>
-              <Counter time={time} />
+              <Counter time={time} total={total} state={signals} />
               <Tape time={time} />
-              <Tiles time={time} />
+              <Tiles time={time} items={items} />
               <GoSticker time={time} />
             </>
           )}

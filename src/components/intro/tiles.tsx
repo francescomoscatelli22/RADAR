@@ -2,11 +2,15 @@
 
 import { motion, useTransform } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
+import type { Signal, SignalKind } from "@/lib/signals";
 import { ACCENT_SERIF, DISPLAY, MONO, backOut, clamp01, easeOut, type Time } from "./timeline";
 
 /*
-  I 6 formati del feed come blocchi Zine (bordo spesso, ombra dura), ognuno con una micro-animazione:
-  video, post, articolo, thread, release, podcast.
+  I blocchi dei formati del feed come adesivi Zine (bordo spesso, ombra dura), ognuno con una micro-animazione.
+  Il CONTENUTO è vero: sono gli ultimi contenuti raccolti da Radar per ogni formato (video, articoli, thread,
+  release, podcast), arrivati da /api/signals. Se un formato non ha ancora contenuti, il suo blocco non c'è;
+  se il database non risponde non compare nessun blocco (mai contenuti inventati).
+  Il formato "post" (LinkedIn) non esiste: non si può leggere. Al suo posto c'è un secondo articolo.
   Arrivano uno dopo l'altro dai lati, come adesivi sbattuti sul poster (entrano con un rimbalzo), e restano lì.
 */
 
@@ -14,6 +18,34 @@ const W = 166;
 const H = 92;
 const INK = "var(--color-card-ink)";
 const READING = "var(--font-newsreader), Georgia, serif";
+
+/** Taglia il testo a N righe con i puntini finali. */
+const clampLines = (lines: number): CSSProperties => ({
+  display: "-webkit-box",
+  WebkitLineClamp: lines,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+});
+
+const oneLine: CSSProperties = { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+
+/** "3 H FA", "12 MIN FA", "2 G FA" */
+function agoText(minutes: number) {
+  if (minutes < 1) return "ORA";
+  if (minutes < 60) return `${minutes} MIN FA`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} H FA`;
+  return `${Math.round(hours / 24)} G FA`;
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
 
 /** Testo che si scrive da solo, lettera per lettera (con cursore finché non ha finito). */
 function useTyped(time: Time, text: string, start: number, dur: number) {
@@ -39,11 +71,12 @@ function Play({ size, color }: { size: number; color: string }) {
   );
 }
 
-type BodyProps = { time: Time; at: number };
+type BodyProps = { time: Time; at: number; signal: Signal };
 
 // ---------- video: il play pulsa e la barra di avanzamento si riempie ----------
-function VideoBody({ time, at }: BodyProps) {
-  const fill = useTransform(time, (t) => `${100 * clamp01((t - at - 0.2) / 2.2)}%`);
+function VideoBody({ time, at, signal }: BodyProps) {
+  // la barra del video si riempie e riparte da capo, come un video che gira
+  const fill = useTransform(time, (t) => `${t < at + 0.2 ? 0 : (((t - at - 0.2) % 3.6) / 3.6) * 100}%`);
   const pulse = useTransform(time, (t) => 1 + 0.14 * Math.sin((t - at) * 7));
   return (
     <div style={{ display: "flex", gap: 8, flex: 1, minHeight: 0 }}>
@@ -76,31 +109,35 @@ function VideoBody({ time, at }: BodyProps) {
         </motion.span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", minWidth: 0, flex: 1 }}>
-        <span style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 12, lineHeight: 1.05 }}>
-          Un logo con l&apos;AI in 60 secondi
+        <span style={{ ...clampLines(3), fontFamily: DISPLAY, fontWeight: 700, fontSize: 11, lineHeight: 1.05 }}>
+          {signal.title}
         </span>
-        <div style={{ height: 7, boxSizing: "border-box", border: `2px solid ${INK}`, background: "rgba(0,0,0,0.12)" }}>
-          <motion.div style={{ height: "100%", width: fill, background: INK }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <small style={{ ...oneLine, fontFamily: MONO, fontSize: 7, lineHeight: 1, textTransform: "uppercase" }}>
+            {signal.source}
+          </small>
+          <div style={{ height: 6, boxSizing: "border-box", border: `2px solid ${INK}`, background: "rgba(0,0,0,0.12)" }}>
+            <motion.div style={{ height: "100%", width: fill, background: INK }} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ---------- post: il testo si scrive da solo ----------
-const POST_TEXT = "Il miglior prompt è una buona domanda.";
-function PostBody({ time, at }: BodyProps) {
-  const typed = useTyped(time, POST_TEXT, at + 0.3, 1.4);
+// ---------- articolo (versione "scritto a macchina"): il titolo si scrive da solo ----------
+function TypedArticleBody({ time, at, signal }: BodyProps) {
+  const typed = useTyped(time, signal.title, at + 0.4, Math.min(3, signal.title.length * 0.04));
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <span
           style={{
             display: "grid",
             placeItems: "center",
             flex: "none",
-            width: 22,
-            height: 22,
+            width: 20,
+            height: 20,
             boxSizing: "border-box",
             border: `2px solid ${INK}`,
             borderRadius: "50%",
@@ -108,88 +145,87 @@ function PostBody({ time, at }: BodyProps) {
             color: "var(--color-cream)",
             fontFamily: DISPLAY,
             fontWeight: 700,
-            fontSize: 8,
+            fontSize: 7.5,
           }}
         >
-          GV
+          {initials(signal.source)}
         </span>
-        <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <b style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 10, lineHeight: 1 }}>Giulia Verdi</b>
-          <small style={{ fontFamily: MONO, fontSize: 7, lineHeight: 1 }}>UX Research · Roma</small>
-        </span>
+        <b style={{ ...oneLine, fontFamily: DISPLAY, fontWeight: 700, fontSize: 10, lineHeight: 1 }}>{signal.source}</b>
       </div>
-      <motion.p style={{ margin: 0, fontFamily: READING, fontSize: 11.5, lineHeight: 1.1, minHeight: 25 }}>
+      <motion.p style={{ ...clampLines(3), margin: 0, fontFamily: READING, fontSize: 11, lineHeight: 1.08 }}>
         {typed}
       </motion.p>
     </div>
   );
 }
 
-// ---------- articolo: i titoli salgono da sotto una "finestra" ----------
-function ArticleLine({ time, start, children }: { time: Time; start: number; children: ReactNode }) {
-  const y = useTransform(time, (t) => `${(1 - easeOut(clamp01((t - start) / 0.45))) * 115}%`);
+// ---------- articolo: il titolo sale da sotto una "finestra" ----------
+function ArticleBody({ time, at, signal }: BodyProps) {
+  const y = useTransform(time, (t) => `${(1 - easeOut(clamp01((t - at - 0.15) / 0.5))) * 115}%`);
+  const sourceOpacity = useTransform(time, (t) => clamp01((t - at - 0.9) / 0.3));
   return (
-    <div style={{ overflow: "hidden" }}>
-      <motion.div style={{ y }}>{children}</motion.div>
-    </div>
-  );
-}
-
-function ArticleBody({ time, at }: BodyProps) {
-  const headline: CSSProperties = {
-    fontFamily: DISPLAY,
-    fontWeight: 800,
-    fontSize: 14,
-    lineHeight: 1.08,
-    letterSpacing: "-0.015em",
-  };
-  const accentOpacity = useTransform(time, (t) => clamp01((t - at - 0.9) / 0.3));
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={headline}>
-        <ArticleLine time={time} start={at + 0.15}>
-          Che cos&apos;è un modello
-        </ArticleLine>
-        <ArticleLine time={time} start={at + 0.3}>
-          multimodale?
-        </ArticleLine>
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 0 }}>
+      <div style={{ overflow: "hidden" }}>
+        <motion.div
+          style={{
+            ...clampLines(3),
+            y,
+            fontFamily: DISPLAY,
+            fontWeight: 800,
+            fontSize: 12,
+            lineHeight: 1.08,
+            letterSpacing: "-0.015em",
+          }}
+        >
+          {signal.title}
+        </motion.div>
       </div>
-      <motion.span style={{ opacity: accentOpacity, fontFamily: ACCENT_SERIF, fontStyle: "italic", fontSize: 14, lineHeight: 1 }}>
-        spiegato bene.
+      <motion.span
+        style={{ ...oneLine, opacity: sourceOpacity, fontFamily: ACCENT_SERIF, fontStyle: "italic", fontSize: 13, lineHeight: 1 }}
+      >
+        {signal.source}
       </motion.span>
     </div>
   );
 }
 
-// ---------- thread: il contatore dei punti sale ----------
-function ThreadBody({ time, at }: BodyProps) {
-  const points = useTransform(time, (t) => String(Math.round(482 * easeOut(clamp01((t - at - 0.1) / 1.5)))));
+// ---------- thread: il contatore dei punti sale fino ai punti veri ----------
+function ThreadBody({ time, at, signal }: BodyProps) {
+  const total = signal.points ?? 0;
+  const points = useTransform(time, (t) => String(Math.round(total * easeOut(clamp01((t - at - 0.1) / 2.8)))));
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "none", width: 64 }}>
         <span style={{ fontSize: 9, lineHeight: 1 }}>▲</span>
         <motion.b
-          style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 38, lineHeight: 0.9, letterSpacing: "-0.06em" }}
+          style={{
+            fontFamily: DISPLAY,
+            fontWeight: 800,
+            fontSize: total >= 1000 ? 28 : 38,
+            lineHeight: 0.9,
+            letterSpacing: "-0.06em",
+          }}
         >
           {points}
         </motion.b>
       </div>
-      <span style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 10.5, lineHeight: 1.05 }}>
-        Show HN: un editor di video nel browser
-      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+        <span style={{ ...clampLines(3), fontFamily: DISPLAY, fontWeight: 700, fontSize: 10, lineHeight: 1.05 }}>
+          {signal.title}
+        </span>
+        <small style={{ ...oneLine, fontFamily: MONO, fontSize: 7, lineHeight: 1 }}>{signal.comments ?? 0} COMMENTI</small>
+      </div>
     </div>
   );
 }
 
-// ---------- release: il registro delle modifiche si scrive nel pannello nero ----------
+// ---------- release: il pannello nero si "scrive" con i dati della release ----------
 function CodeLine({ time, text, start, bold }: { time: Time; text: string; start: number; bold?: boolean }) {
-  const typed = useTyped(time, text, start, 0.4);
-  return (
-    <motion.span style={{ fontWeight: bold ? 700 : 400, whiteSpace: "nowrap", minHeight: 10 }}>{typed}</motion.span>
-  );
+  const typed = useTyped(time, text, start, 0.9);
+  return <motion.span style={{ ...oneLine, fontWeight: bold ? 700 : 400, minHeight: 10 }}>{typed}</motion.span>;
 }
 
-function ReleaseBody({ time, at }: BodyProps) {
+function ReleaseBody({ time, at, signal }: BodyProps) {
   return (
     <div
       style={{
@@ -198,6 +234,7 @@ function ReleaseBody({ time, at }: BodyProps) {
         gap: 2,
         flex: 1,
         minHeight: 0,
+        minWidth: 0,
         padding: "5px 7px",
         background: "#000",
         color: "var(--color-cream)",
@@ -206,23 +243,23 @@ function ReleaseBody({ time, at }: BodyProps) {
         lineHeight: 1.25,
       }}
     >
-      <CodeLine time={time} text="v2.4.0 · AGENT-KIT" start={at + 0.2} bold />
-      <CodeLine time={time} text="+ sub-agenti in parallelo" start={at + 0.65} />
-      <CodeLine time={time} text="~ fix: memoria sessione" start={at + 1.1} />
+      <CodeLine time={time} text={`${signal.title} · ${signal.source.toUpperCase()}`} start={at + 0.4} bold />
+      <CodeLine time={time} text="nuova release" start={at + 1.4} />
+      <CodeLine time={time} text={agoText(signal.ageMinutes).toLowerCase()} start={at + 2.5} />
     </div>
   );
 }
 
 // ---------- podcast: la forma d'onda pulsa ----------
-function WaveBar({ time, at, i }: BodyProps & { i: number }) {
+function WaveBar({ time, at, i }: { time: Time; at: number; i: number }) {
   const scaleY = useTransform(time, (t) => {
     const grow = easeOut(clamp01((t - at - 0.15 - i * 0.02) / 0.4));
     return grow * (0.2 + 0.8 * Math.abs(Math.sin(t * 5.5 + i * 0.75)));
   });
-  return <motion.i style={{ display: "block", flex: "none", width: 4, height: 38, background: INK, scaleY }} />;
+  return <motion.i style={{ display: "block", flex: "none", width: 4, height: 14, background: INK, scaleY }} />;
 }
 
-function PodcastBody({ time, at }: BodyProps) {
+function PodcastBody({ time, at, signal }: BodyProps) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minHeight: 0 }}>
       <div
@@ -230,50 +267,78 @@ function PodcastBody({ time, at }: BodyProps) {
           display: "grid",
           placeItems: "center",
           flex: "none",
-          width: 40,
-          height: 40,
+          width: 34,
+          height: 34,
           boxSizing: "border-box",
           border: `2.5px solid ${INK}`,
           background: "var(--color-platform-video)",
         }}
       >
-        <Play size={11} color="var(--color-cream)" />
+        <Play size={10} color="var(--color-cream)" />
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1, height: 40 }}>
-        {Array.from({ length: 14 }, (_, i) => (
-          <WaveBar key={i} time={time} at={at} i={i} />
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
+        <span style={{ ...clampLines(2), fontFamily: DISPLAY, fontWeight: 700, fontSize: 10, lineHeight: 1.05 }}>
+          {signal.title}
+        </span>
+        <small style={{ ...oneLine, fontFamily: MONO, fontSize: 7, lineHeight: 1, textTransform: "uppercase" }}>
+          {signal.source}
+        </small>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 14 }}>
+          {Array.from({ length: 14 }, (_, i) => (
+            <WaveBar key={i} time={time} at={at} i={i} />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-// ---------- i sei blocchi ----------
-type Spec = {
-  id: string;
-  x: number;
-  y: number;
-  rot: number;
-  bg: string;
-  label: string;
-  meta: string;
-  Body: (p: BodyProps) => ReactNode;
+// ---------- i blocchi ----------
+type Kind = SignalKind | "article-typed";
+
+const STYLE: Record<Kind, { bg: string; label: string; Body: (p: BodyProps) => ReactNode }> = {
+  video: { bg: "var(--color-card-video)", label: "VIDEO", Body: VideoBody },
+  "article-typed": { bg: "var(--color-card-post)", label: "ARTICOLO", Body: TypedArticleBody },
+  article: { bg: "var(--color-cream)", label: "ARTICOLO", Body: ArticleBody },
+  thread: { bg: "var(--color-card-thread)", label: "THREAD", Body: ThreadBody },
+  release: { bg: "var(--color-card-code)", label: "RELEASE", Body: ReleaseBody },
+  podcast: { bg: "var(--color-card-audio)", label: "PODCAST", Body: PodcastBody },
 };
 
-const SPECS: Spec[] = [
-  { id: "video", x: 24, y: 396, rot: -1.5, bg: "var(--color-card-video)", label: "VIDEO", meta: "YOUTUBE", Body: VideoBody },
-  { id: "post", x: 200, y: 402, rot: 1.2, bg: "var(--color-card-post)", label: "POST", meta: "LINKEDIN", Body: PostBody },
-  { id: "article", x: 24, y: 498, rot: 1, bg: "var(--color-cream)", label: "ARTICOLO", meta: "3 H", Body: ArticleBody },
-  { id: "thread", x: 200, y: 504, rot: -1.2, bg: "var(--color-card-thread)", label: "THREAD", meta: "HN", Body: ThreadBody },
-  { id: "release", x: 24, y: 600, rot: -1, bg: "var(--color-card-code)", label: "RELEASE", meta: "GITHUB", Body: ReleaseBody },
-  { id: "podcast", x: 200, y: 606, rot: 1.5, bg: "var(--color-card-audio)", label: "PODCAST", meta: "42 MIN", Body: PodcastBody },
+// i sei posti sul poster (a coppie, leggermente storti)
+const SLOTS = [
+  { x: 24, y: 396, rot: -1.5 },
+  { x: 200, y: 402, rot: 1.2 },
+  { x: 24, y: 498, rot: 1 },
+  { x: 200, y: 504, rot: -1.2 },
+  { x: 24, y: 600, rot: -1 },
+  { x: 200, y: 606, rot: 1.5 },
 ];
 
 const FIRST_AT = 1.0; // il primo blocco arriva a 1 s
-const GAP = 0.32; // e gli altri a distanza di 0,32 s
+const GAP = 0.7; // e gli altri a distanza di 0,7 s (l'ultimo arriva a 4,5 s)
 
-function Tile({ time, spec, index }: { time: Time; spec: Spec; index: number }) {
-  const { x, y, rot, bg, label, meta, Body } = spec;
+type Placed = { kind: Kind; signal: Signal };
+
+/** Mette i contenuti veri nell'ordine del poster; salta i formati che non hanno contenuti. */
+function arrange(items: Signal[]): Placed[] {
+  const articles = items.filter((s) => s.kind === "article");
+  const find = (kind: SignalKind) => items.find((s) => s.kind === kind);
+  const order: (Placed | null)[] = [
+    find("video") ? { kind: "video", signal: find("video")! } : null,
+    articles[1] ? { kind: "article-typed", signal: articles[1] } : null,
+    articles[0] ? { kind: "article", signal: articles[0] } : null,
+    find("thread") ? { kind: "thread", signal: find("thread")! } : null,
+    find("release") ? { kind: "release", signal: find("release")! } : null,
+    find("podcast") ? { kind: "podcast", signal: find("podcast")! } : null,
+  ];
+  return order.filter((p): p is Placed => p !== null);
+}
+
+function Tile({ time, placed, index }: { time: Time; placed: Placed; index: number }) {
+  const { x, y, rot } = SLOTS[index];
+  const { bg, label, Body } = STYLE[placed.kind];
+  const { signal } = placed;
   const at = FIRST_AT + index * GAP;
   // quelli di sinistra arrivano da sinistra, quelli di destra da destra
   const side = x < 100 ? -1 : 1;
@@ -282,7 +347,11 @@ function Tile({ time, spec, index }: { time: Time; spec: Spec; index: number }) 
   const enter = (t: number) => backOut(clamp01((t - at) / 0.6));
 
   const tx = useTransform(time, (t) => side * 420 * (1 - enter(t)));
-  const ty = useTransform(time, (t) => 40 * (1 - enter(t)));
+  // dopo l'arrivo il blocco "respira" piano su e giù, così lo schermo non si ferma mai
+  const ty = useTransform(
+    time,
+    (t) => 40 * (1 - enter(t)) + Math.sin((t - at) * 1.7 + index * 1.3) * 2.4 * clamp01((t - at - 0.7) / 0.6),
+  );
   const scale = useTransform(time, (t) => 0.7 + 0.3 * enter(t));
   const rotate = useTransform(time, (t) => rot + dir * 22 * (1 - enter(t)));
   const opacity = useTransform(time, (t) => clamp01((t - at) / 0.1));
@@ -324,18 +393,18 @@ function Tile({ time, spec, index }: { time: Time; spec: Spec; index: number }) 
         }}
       >
         <span>{label}</span>
-        <span style={{ opacity: 0.6 }}>{meta}</span>
+        <span style={{ opacity: 0.6 }}>{agoText(signal.ageMinutes)}</span>
       </div>
-      <Body time={time} at={at} />
+      <Body time={time} at={at} signal={signal} />
     </motion.div>
   );
 }
 
-export default function Tiles({ time }: { time: Time }) {
+export default function Tiles({ time, items }: { time: Time; items: Signal[] }) {
   return (
     <>
-      {SPECS.map((spec, i) => (
-        <Tile key={spec.id} time={time} spec={spec} index={i} />
+      {arrange(items).map((placed, i) => (
+        <Tile key={`${placed.kind}-${placed.signal.title}`} time={time} placed={placed} index={i} />
       ))}
     </>
   );

@@ -8,13 +8,13 @@ import type { MotionValue } from "motion/react";
 
 export type Time = MotionValue<number>;
 
-// La barra di caricamento dura ESATTAMENTE 5 secondi; poi tre strisce colorate "strappano" via il poster.
-export const BAR_SECONDS = 5;
+// La barra di caricamento dura ESATTAMENTE 8,5 secondi; poi tre strisce colorate "strappano" via il poster.
+export const BAR_SECONDS = 8.5;
 export const STRIPES = 3;
 export const STRIPE_SECONDS = 0.35; // tempo di una striscia per attraversare lo schermo
 export const STRIPE_STAGGER = 0.07; // ritardo tra una striscia e la successiva
-export const REVEAL_AT = 5.4; // tutto è coperto: il poster sparisce e lo Splash viene montato sotto
-export const PEEL_AT = 5.5; // le strisce cominciano a scoprire lo Splash
+export const REVEAL_AT = BAR_SECONDS + 0.4; // tutto è coperto: il poster sparisce e lo Splash viene montato sotto
+export const PEEL_AT = BAR_SECONDS + 0.5; // le strisce cominciano a scoprire lo Splash
 export const TOTAL_SECONDS = PEEL_AT + (STRIPES - 1) * STRIPE_STAGGER + STRIPE_SECONDS;
 
 // Artboard 390 x 844, come il frame Figma e la schermata iniziale
