@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedItem, FeedPage, Format } from "@/lib/feed";
+import { useLang } from "@/lib/store";
 
 /*
   Carica il feed a pagine dalla rotta /api/feed.
@@ -45,8 +46,9 @@ function writeCache(key: string, page: FeedPage) {
   }
 }
 
-async function fetchPage(q: Pick<FeedQuery, "topics" | "sources" | "format">, cursor: string | null, signal?: AbortSignal) {
+async function fetchPage(q: Pick<FeedQuery, "topics" | "sources" | "format"> & { lang: string }, cursor: string | null, signal?: AbortSignal) {
   const qs = new URLSearchParams();
+  qs.set("lang", q.lang); // il server traduce titoli e anteprime scritti in altre lingue
   if (q.topics?.length) qs.set("topics", q.topics.join(","));
   if (q.sources?.length) qs.set("sources", q.sources.join(","));
   if (q.format !== "all") qs.set("format", q.format);
@@ -66,7 +68,9 @@ const memory = new Map<string, Memory>();
 
 export function useFeed(query: FeedQuery) {
   const { topics, sources, format, enabled } = query;
-  const key = JSON.stringify([topics ?? [], sources ?? [], format]);
+  const lang = useLang();
+  // la lingua fa parte della chiave: cambiandola, memoria e copia offline del feed non si mescolano
+  const key = JSON.stringify([topics ?? [], sources ?? [], format, lang]);
   const [data, setData] = useState<Data | null>(() => {
     const m = memory.get(key);
     return m ? { key, items: m.items, next: m.next, status: "ready", offline: false } : null;
@@ -78,9 +82,9 @@ export function useFeed(query: FeedQuery) {
   const busy = useRef(false);
   const manual = useRef(false); // true = l'utente ha chiesto di ricaricare (allora si sostituisce tutto)
   // sempre l'ultima richiesta, senza dover rifare gli effetti a ogni render
-  const latest = useRef({ topics, sources, format, key });
+  const latest = useRef({ topics, sources, format, lang, key });
   useEffect(() => {
-    latest.current = { topics, sources, format, key };
+    latest.current = { topics, sources, format, lang, key };
   });
 
   useEffect(() => {

@@ -35,4 +35,6 @@ export interface RawItem {
 
 export interface Item extends RawItem {
   topics: string[];
+  /** Lingua del testo ("it", "en"…), oppure null se non riconosciuta (allora non si traduce). */
+  lang: string | null;
 }

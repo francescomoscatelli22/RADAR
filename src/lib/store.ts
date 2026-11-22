@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { FeedItem, Platform } from "@/lib/feed";
+import { DEFAULT_LANG, isLang, type Lang } from "@/lib/languages";
 
 /*
   Archivio locale di Radar (sul dispositivo, in localStorage): argomenti scelti,
@@ -12,6 +13,7 @@ import type { FeedItem, Platform } from "@/lib/feed";
 export type Follow = { ids: string[]; name: string; platform: Platform };
 
 export type RadarData = {
+  lang: Lang | null; // lingua scelta; null = non ancora scelta (si usa l'italiano)
   topics: string[] | null; // null = la scelta degli argomenti non è ancora stata fatta
   follows: Follow[];
   saved: FeedItem[]; // copie complete: si rileggono anche offline
@@ -23,7 +25,7 @@ export type RadarState = RadarData & { ready: boolean };
 const KEY = "radar:v1";
 const MAX_SAVED = 300;
 
-const EMPTY: RadarData = { topics: null, follows: [], saved: [], updatedAt: 0 };
+const EMPTY: RadarData = { lang: null, topics: null, follows: [], saved: [], updatedAt: 0 };
 // sul server (e durante l'idratazione) l'archivio non c'è ancora: ready=false
 const SERVER: RadarState = { ...EMPTY, ready: false };
 
@@ -37,6 +39,7 @@ function load(): RadarState {
       const d = JSON.parse(raw) as Partial<RadarData>;
       return {
         ready: true,
+        lang: isLang(d.lang) ? d.lang : null,
         topics: Array.isArray(d.topics) ? d.topics : null,
         follows: Array.isArray(d.follows) ? d.follows : [],
         saved: Array.isArray(d.saved) ? d.saved : [],
@@ -111,6 +114,9 @@ export const radar = {
   setTopics(topics: string[]) {
     commit({ topics });
   },
+  setLang(lang: Lang) {
+    commit({ lang });
+  },
   isFollowing(sourceId: string) {
     return getState().follows.some((f) => f.ids.includes(sourceId));
   },
@@ -137,13 +143,22 @@ export const radar = {
     commit(data, false);
   },
   reset() {
-    commit({ ...EMPTY }, false);
+    commit({ ...EMPTY, lang: getState().lang }, false); // la lingua non si cancella: non è un dato da "ripulire"
   },
 };
 
 /** Legge l'archivio nei componenti (si aggiorna da solo a ogni modifica). */
 export function useRadar(): RadarState {
   return useSyncExternalStore(subscribe, getState, () => SERVER);
+}
+
+/** La lingua dell'utente (italiano finché non ne sceglie un'altra). Cambia solo quando la cambia lui. */
+export function useLang(): Lang {
+  return useSyncExternalStore(
+    subscribe,
+    () => getState().lang ?? DEFAULT_LANG,
+    () => DEFAULT_LANG,
+  );
 }
 
 /*

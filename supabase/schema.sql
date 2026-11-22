@@ -43,6 +43,9 @@ create table if not exists items (
   unique (source_id, external_id)       -- evita i doppioni a ogni raccolta
 );
 
+-- Lingua e traduzioni dei contenuti: vedi supabase/translations.sql
+-- (se parti da zero, incolla anche quel file dopo questo).
+
 -- Feed cronologico: i più recenti prima; filtro per argomento.
 create index if not exists items_published_idx on items (published_at desc);
 create index if not exists items_topics_idx on items using gin (topics);

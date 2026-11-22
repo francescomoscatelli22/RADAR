@@ -14,6 +14,10 @@ export type FeedItem = {
   summary: string;
   image: string | null;
   topics: string[];
+  /** Lingua in cui è scritto il contenuto ("en", "it"…); assente o null = non riconosciuta. */
+  lang?: string | null;
+  /** Traduzione di titolo e anteprima nella lingua `lang` scelta dall'utente (se c'è). */
+  tr?: { lang: string; title: string; summary: string };
   source: { id: string; name: string };
   meta: {
     duration?: string; // podcast "34:12" o secondi
@@ -69,6 +73,12 @@ export const FORMAT_LABEL: Record<Format, string> = {
   thread: "Thread",
   release: "Release",
 };
+
+/** Titolo e anteprima da mostrare: la traduzione se è nella lingua scelta, altrimenti l'originale. */
+export function shownText(item: FeedItem, lang: string) {
+  const t = item.tr && item.tr.lang === lang ? item.tr : null;
+  return { title: t?.title ?? item.title, summary: t?.summary ?? item.summary, translated: t !== null };
+}
 
 /** "ComfyUI (release)" → "ComfyUI"; "Hacker News: generative AI" → "Hacker News". */
 export function cleanSourceName(name: string) {

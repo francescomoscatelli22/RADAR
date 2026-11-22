@@ -75,13 +75,14 @@ export function startSync(userId: string) {
       if (row && row.updated_at > local.updatedAt) {
         applyingRemote = true;
         radar.replace({
+          lang: row.data.lang ?? local.lang, // gli account creati prima della lingua non hanno il campo: si tiene quella del dispositivo
           topics: row.data.topics ?? null,
           follows: row.data.follows ?? [],
           saved: row.data.saved ?? [],
           updatedAt: row.updated_at,
         });
         applyingRemote = false;
-      } else if (local.topics !== null || local.follows.length || local.saved.length) {
+      } else if (local.lang !== null || local.topics !== null || local.follows.length || local.saved.length) {
         await push();
       }
     } catch {

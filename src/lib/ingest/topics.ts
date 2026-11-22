@@ -72,5 +72,5 @@ export function assignTopics(
   }
 
   for (const t of afterFilter) found.add(t);
-  return { ...raw, topics: [...found] };
+  return { ...raw, topics: [...found], lang: null }; // la lingua si assegna dopo, su tutto il gruppo di contenuti della fonte
 }

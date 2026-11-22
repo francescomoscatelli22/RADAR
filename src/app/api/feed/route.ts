@@ -1,4 +1,6 @@
 import { serverDb } from "@/lib/server/db";
+import { attachTranslations } from "@/lib/server/translate";
+import { isLang } from "@/lib/languages";
 import {
   FORMAT_PLATFORM,
   cleanSourceName,
@@ -15,6 +17,7 @@ import {
    - topics   = slug degli argomenti scelti, separati da virgola (i gruppi includono i figli)
    - format   = video | article | podcast | thread | release
    - sources  = id delle fonti seguite, separati da virgola
+   - lang     = it | en: lingua dell'utente; titoli e anteprime scritti in altre lingue arrivano tradotti (campo "tr")
    - cursor   = "ISO~id" dell'ultimo elemento già visto (paginazione)
    - limit    = quanti elementi (default 20, massimo 40)
 */
@@ -28,12 +31,13 @@ type Row = {
   summary: string;
   image_url: string | null;
   topics: string[];
+  lang: string | null;
   meta: Record<string, unknown> | null;
   source_id: string;
   sources: { name: string } | { name: string }[] | null;
 };
 
-const COLUMNS = "id, platform, title, url, published_at, summary, image_url, topics, meta, source_id, sources(name)";
+const COLUMNS = "id, platform, title, url, published_at, summary, image_url, topics, lang, meta, source_id, sources(name)";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z0-9-]{1,60}$/;
 
@@ -71,6 +75,7 @@ function toItem(r: Row): FeedItem {
     summary: r.summary,
     image: r.image_url,
     topics: r.topics,
+    lang: r.lang,
     source: { id: r.source_id, name: cleanSourceName(src?.name ?? "") },
     meta: {
       duration: str(m.duration),
@@ -81,6 +86,9 @@ function toItem(r: Row): FeedItem {
     },
   };
 }
+
+// tradurre una pagina intera la prima volta richiede qualche secondo
+export const maxDuration = 30;
 
 export async function GET(request: Request) {
   const db = serverDb();
@@ -129,8 +137,12 @@ export async function GET(request: Request) {
   const seenUrls = new Set<string>();
   const page = rows.slice(0, limit).filter((r) => !seenUrls.has(r.url) && seenUrls.add(r.url));
   const last = page[page.length - 1];
+  const items = page.map(toItem);
+  // lingua scelta dall'utente: i contenuti scritti in un'altra lingua arrivano con titolo e anteprima tradotti
+  const lang = p.get("lang");
+  if (isLang(lang)) await attachTranslations(db, items, lang);
   const body: FeedPage = {
-    items: page.map(toItem),
+    items,
     next: more && last ? `${new Date(last.published_at).toISOString()}~${last.id}` : null,
   };
   return Response.json(body, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } });

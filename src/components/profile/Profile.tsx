@@ -3,8 +3,10 @@
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { signOut, useAuth } from "@/lib/auth";
-import { radar, useRadar } from "@/lib/store";
+import { radar, useLang, useRadar } from "@/lib/store";
+import { LANGUAGES } from "@/lib/languages";
 import Button from "@/components/ui/Button";
+import Chip from "@/components/ui/Chip";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import PageTitle from "@/components/ui/PageTitle";
 
@@ -43,6 +45,7 @@ function Row({ href, icon, label, value }: { href: string; icon: IconName; label
 export default function Profile() {
   const { configured, loading, user } = useAuth();
   const { topics, follows, saved } = useRadar();
+  const lang = useLang();
   const standalone = useStandalone();
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -80,6 +83,19 @@ export default function Profile() {
             </div>
           </>
         )}
+      </Section>
+
+      <Section title="Lingua">
+        <p className="mb-4 text-[15px] leading-snug text-cream-2">
+          Titoli e anteprime scritti in un&apos;altra lingua vengono tradotti nella tua. Il link porta sempre all&apos;originale.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {LANGUAGES.map((l) => (
+            <Chip key={l.code} selected={lang === l.code} onClick={() => radar.setLang(l.code)}>
+              {l.label}
+            </Chip>
+          ))}
+        </div>
       </Section>
 
       <Section title="Il tuo radar">

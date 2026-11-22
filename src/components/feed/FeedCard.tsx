@@ -1,8 +1,9 @@
 "use client";
 
 import { memo, useState } from "react";
-import { PLATFORM_FORMAT, prettyDuration, thumbUrl, timeAgo, type FeedItem } from "@/lib/feed";
-import { radar, useIsFollowing, useIsSaved } from "@/lib/store";
+import { PLATFORM_FORMAT, prettyDuration, shownText, thumbUrl, timeAgo, type FeedItem } from "@/lib/feed";
+import { TRANSLATED_LABEL } from "@/lib/languages";
+import { radar, useIsFollowing, useIsSaved, useLang } from "@/lib/store";
 import { useNow } from "@/lib/clock";
 import { toast } from "@/lib/toast";
 import Icon, { type IconName } from "@/components/ui/Icon";
@@ -84,13 +85,16 @@ function ActionButton({
 function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
   const isSaved = useIsSaved(item.id);
   const following = useIsFollowing(item.source.id);
+  const lang = useLang();
+  // titolo e anteprima nella lingua dell'utente (se il server li ha tradotti), altrimenti l'originale
+  const shown = shownText(item, lang);
   const [copied, setCopied] = useState(false);
   const fmt = FORMAT_STYLE[PLATFORM_FORMAT[item.platform]];
 
   const share = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: item.title, url: item.url });
+        await navigator.share({ title: shown.title, url: item.url });
         return;
       }
       await navigator.clipboard.writeText(item.url);
@@ -118,9 +122,9 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
 
   // le release hanno titoli come "v0.40.17": davanti ci mettiamo il nome del progetto
   const title =
-    item.platform === "github" && !item.title.toLowerCase().includes(item.source.name.toLowerCase())
-      ? `${item.source.name} ${item.title}`
-      : item.title;
+    item.platform === "github" && !shown.title.toLowerCase().includes(item.source.name.toLowerCase())
+      ? `${item.source.name} ${shown.title}`
+      : shown.title;
   const isVideo = item.platform === "youtube";
   const isPodcast = item.platform === "podcast";
   const duration = isPodcast ? prettyDuration(item.meta.duration) : null;
@@ -153,6 +157,9 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
               <span className="font-mono text-[11px] font-bold">▲ {item.meta.points}</span>
             )}
             {duration && <span className="font-mono text-[11px] font-bold">{duration}</span>}
+            {shown.translated && (
+              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">· {TRANSLATED_LABEL[lang]}</span>
+            )}
           </div>
 
           <h2 className="font-display text-xl font-extrabold leading-[1.15] tracking-tight [text-wrap:balance]">
@@ -167,8 +174,8 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
             </a>
           </h2>
 
-          {!isVideo && item.platform !== "hn" && item.summary && (
-            <p className="mt-2 line-clamp-3 font-reading text-[15px] leading-snug text-card-ink/80">{item.summary}</p>
+          {!isVideo && item.platform !== "hn" && shown.summary && (
+            <p className="mt-2 line-clamp-3 font-reading text-[15px] leading-snug text-card-ink/80">{shown.summary}</p>
           )}
 
           {item.platform === "hn" && (
