@@ -61,7 +61,7 @@ async function fetchPage(q: Pick<FeedQuery, "topics" | "sources" | "format"> & {
 
 /**
  * Il server risponde presto con le traduzioni pronte e dice quante mancano (`pending`):
- * qui si richiede la stessa pagina, al massimo 6 volte a distanza di qualche secondo, finché le card in lingua originale diventano tradotte.
+ * qui si richiede la stessa pagina, al massimo 12 volte a distanza di qualche secondo, finché le card in lingua originale diventano tradotte.
  */
 async function completeTranslations(
   first: FeedPage,
@@ -71,7 +71,7 @@ async function completeTranslations(
   signal?: AbortSignal,
 ) {
   let page = first;
-  for (let n = 0; n < 6 && page.pending; n++) {
+  for (let n = 0; n < 12 && page.pending; n++) {
     // le traduzioni in corso sul server finiscono in pochi secondi: si aspetta prima di richiedere
     await new Promise((r) => setTimeout(r, 2500));
     if (signal?.aborted) return;
