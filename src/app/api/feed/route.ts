@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { serverDb } from "@/lib/server/db";
 import { attachTranslations } from "@/lib/server/translate";
 import { isLang } from "@/lib/languages";
@@ -87,7 +88,7 @@ function toItem(r: Row): FeedItem {
   };
 }
 
-// tradurre una pagina intera la prima volta richiede qualche secondo
+// si risponde entro ~3 secondi; le traduzioni in corso proseguono dopo la risposta (fino a ~25 s, vedi translate.ts)
 export const maxDuration = 30;
 
 export async function GET(request: Request) {
@@ -140,10 +141,20 @@ export async function GET(request: Request) {
   const items = page.map(toItem);
   // lingua scelta dall'utente: i contenuti scritti in un'altra lingua arrivano con titolo e anteprima tradotti
   const lang = p.get("lang");
-  if (isLang(lang)) await attachTranslations(db, items, lang);
+  let pending = 0;
+  if (isLang(lang)) {
+    // si risponde dopo pochi secondi con quello che è pronto: il resto lo completa l'app richiedendo la pagina (campo "pending")
+    const { done } = await attachTranslations(db, items, lang, 3000);
+    after(() => done); // le traduzioni ancora in corso finiscono e si salvano anche a risposta inviata
+    pending = items.filter((i) => i.lang && i.lang !== lang && !i.tr).length;
+  }
   const body: FeedPage = {
     items,
+    ...(pending ? { pending } : {}),
     next: more && last ? `${new Date(last.published_at).toISOString()}~${last.id}` : null,
   };
-  return Response.json(body, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } });
+  // una pagina con traduzioni mancanti non si tiene in cache: la richiesta di completamento deve arrivare al server
+  return Response.json(body, {
+    headers: { "Cache-Control": pending ? "no-store" : "public, s-maxage=60, stale-while-revalidate=120" },
+  });
 }

@@ -31,6 +31,8 @@ export type FeedItem = {
 export type FeedPage = {
   items: FeedItem[];
   next: string | null; // cursore per la pagina dopo, null = finito
+  /** Quanti contenuti non sono ancora tradotti (il traduttore non ha fatto in tempo): l'app richiede la pagina e li completa. */
+  pending?: number;
 };
 
 export type TopicNode = {

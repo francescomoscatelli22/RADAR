@@ -59,6 +59,39 @@ async function fetchPage(q: Pick<FeedQuery, "topics" | "sources" | "format"> & {
   return (await res.json()) as FeedPage;
 }
 
+/**
+ * Il server risponde presto con le traduzioni pronte e dice quante mancano (`pending`):
+ * qui si richiede la stessa pagina, al massimo 6 volte a distanza di qualche secondo, finché le card in lingua originale diventano tradotte.
+ */
+async function completeTranslations(
+  first: FeedPage,
+  q: Parameters<typeof fetchPage>[0],
+  cursor: string | null,
+  apply: (page: FeedPage) => void,
+  signal?: AbortSignal,
+) {
+  let page = first;
+  for (let n = 0; n < 6 && page.pending; n++) {
+    // le traduzioni in corso sul server finiscono in pochi secondi: si aspetta prima di richiedere
+    await new Promise((r) => setTimeout(r, 2500));
+    if (signal?.aborted) return;
+    try {
+      page = await fetchPage(q, cursor, signal);
+    } catch {
+      return; // senza rete o richiesta annullata: le card restano nella lingua originale
+    }
+    if (signal?.aborted) return;
+    apply(page);
+  }
+}
+
+/** Mette nelle card già in lista le traduzioni arrivate dopo (si abbinano per id). */
+function mergeTranslations(items: FeedItem[], page: FeedPage): FeedItem[] {
+  const byId = new Map(page.items.filter((i) => i.tr).map((i) => [i.id, i.tr]));
+  if (!byId.size) return items;
+  return items.map((i) => (!i.tr && byId.has(i.id) ? { ...i, tr: byId.get(i.id) } : i));
+}
+
 /*
   Memoria del feed finché l'app resta aperta: cambiando scheda e tornando indietro
   la lista ricompare subito, con tutte le pagine già caricate e nello stesso punto di scorrimento.
@@ -108,6 +141,16 @@ export function useFeed(query: FeedQuery) {
     fetchPage(q, null, ctrl.signal)
       .then((page) => {
         writeCache(q.key, page);
+        // contenuti non ancora tradotti: si completano in background, senza bloccare la lista
+        if (page.pending) {
+          void completeTranslations(
+            page,
+            q,
+            null,
+            (p) => setData((prev) => (prev && prev.key === q.key ? { ...prev, items: mergeTranslations(prev.items, p) } : prev)),
+            ctrl.signal,
+          );
+        }
         const kept = memory.get(q.key);
         // lista già in memoria (si torna da un'altra scheda) e la pagina nuova si "aggancia" a quella:
         // non si tocca la lista (resta il punto di lettura) e i nuovi arrivi compaiono con "N nuovi segnali"
@@ -165,12 +208,18 @@ export function useFeed(query: FeedQuery) {
     busy.current = true;
     setLoadingMore(true);
     try {
-      const page = await fetchPage(latest.current, cur.next);
+      const query = latest.current;
+      const page = await fetchPage(query, cur.next);
       setData((prev) => {
         if (!prev || prev.key !== latest.current.key) return prev;
         const seen = new Set(prev.items.map((i) => i.id));
         return { ...prev, items: [...prev.items, ...page.items.filter((i) => !seen.has(i.id))], next: page.next };
       });
+      if (page.pending) {
+        void completeTranslations(page, query, cur.next, (p) =>
+          setData((prev) => (prev && prev.key === query.key ? { ...prev, items: mergeTranslations(prev.items, p) } : prev)),
+        );
+      }
     } catch {
       /* resta il pulsante "Riprova" in fondo */
       setData((prev) => (prev ? { ...prev, offline: true } : prev));
@@ -196,7 +245,9 @@ export function useFeed(query: FeedQuery) {
     const check = async () => {
       if (document.visibilityState !== "visible") return;
       try {
-        const page = await fetchPage(latest.current, null);
+        let page = await fetchPage(latest.current, null);
+        // i segnali appena usciti arrivano spesso non ancora tradotti: si completano prima di mostrare "N nuovi segnali"
+        await completeTranslations(page, latest.current, null, (p) => (page = p));
         if (stop) return;
         const current = itemsRef.current;
         const seen = new Set(current.map((i) => i.id));

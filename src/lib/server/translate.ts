@@ -15,7 +15,7 @@ import type { Lang } from "@/lib/languages";
 */
 
 const MODEL = "@cf/meta/m2m100-1.2b";
-const CONCURRENCY = 6;
+const CONCURRENCY = 10; // contenuti tradotti insieme (due richieste ciascuno)
 const COOLDOWN_MS = 5 * 60_000; // dopo un errore (es. limite giornaliero finito) si smette di insistere per qualche minuto
 
 // nomi in inglese per il traduttore (la documentazione mostra sia codici "it" sia nomi "italian": si prova prima il codice)
@@ -68,13 +68,25 @@ export async function translateText(text: string, from: string, to: string, sign
   return null;
 }
 
+// contenuti che questo server sta già traducendo: una richiesta ripetuta non li rifà (spreca il piano gratuito)
+const inflight = new Set<string>();
+const HARD_LIMIT_MS = 25_000; // oltre questo tempo una traduzione ancora in corso si abbandona
+
 /**
  * Aggiunge `tr` ai contenuti scritti in una lingua diversa da `target`:
- * prima dalle traduzioni già salvate, poi traducendo quelle che mancano (entro `budgetMs`).
+ * prima dalle traduzioni già salvate, poi traducendo quelle che mancano.
+ * Aspetta al massimo `softMs`: le traduzioni ancora in corso proseguono e si salvano da sole
+ * (la promessa `done` serve a `after()` di Next per tenerle vive), così la richiesta dopo le trova pronte.
  */
-export async function attachTranslations(db: SupabaseClient, items: FeedItem[], target: Lang, budgetMs = 8000) {
+export async function attachTranslations(
+  db: SupabaseClient,
+  items: FeedItem[],
+  target: Lang,
+  softMs = 3000,
+): Promise<{ done: Promise<void> }> {
+  const none = { done: Promise.resolve() };
   const todo = items.filter((i) => i.lang && i.lang !== target);
-  if (!todo.length) return;
+  if (!todo.length) return none;
 
   const cached = await db
     .from("translations")
@@ -88,30 +100,40 @@ export async function attachTranslations(db: SupabaseClient, items: FeedItem[], 
     if (t) i.tr = { lang: target, title: t.title, summary: t.summary };
   }
 
-  const missing = todo.filter((i) => !i.tr);
-  if (!missing.length || !configured() || Date.now() < coolUntil) return;
+  const key = (id: string) => `${id}:${target}`;
+  const missing = todo.filter((i) => !i.tr && !inflight.has(key(i.id)));
+  if (!missing.length || !configured() || Date.now() < coolUntil) return none;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), budgetMs);
-  const fresh: { item_id: string; lang: string; title: string; summary: string }[] = [];
+  const timer = setTimeout(() => ctrl.abort(), HARD_LIMIT_MS);
   const queue = [...missing];
-  try {
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
-        for (let i = queue.shift(); i; i = queue.shift()) {
+  for (const i of queue) inflight.add(key(i.id));
+
+  const done = Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      for (let i = queue.shift(); i; i = queue.shift()) {
+        try {
           const from = i.lang as string;
-          // i titoli delle release sono versioni ("v0.40.17"): si lasciano com'è e si traduce solo l'anteprima
-          const title = i.platform === "github" ? i.title : await translateText(i.title, from, target, ctrl.signal);
-          if (title === null) continue;
-          const summary = i.summary ? await translateText(i.summary, from, target, ctrl.signal) : "";
-          if (summary === null) continue;
+          // i titoli delle release sono versioni ("v0.40.17"): si lasciano com'è e si traduce solo l'anteprima.
+          // Titolo e anteprima partono insieme: dimezza l'attesa.
+          const [title, summary] = await Promise.all([
+            i.platform === "github" ? i.title : translateText(i.title, from, target, ctrl.signal),
+            i.summary ? translateText(i.summary, from, target, ctrl.signal) : "",
+          ]);
+          if (title === null || summary === null) continue;
           i.tr = { lang: target, title, summary };
-          fresh.push({ item_id: i.id, lang: target, title, summary });
+          // si salva subito, una per una: anche se la richiesta è già finita, il lavoro fatto non si perde
+          await db.from("translations").upsert({ item_id: i.id, lang: target, title, summary }, { onConflict: "item_id,lang" });
+        } finally {
+          inflight.delete(key(i.id));
         }
-      }),
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-  if (fresh.length) await db.from("translations").upsert(fresh, { onConflict: "item_id,lang" });
+      }
+    }),
+  )
+    .then(() => undefined)
+    .finally(() => clearTimeout(timer));
+
+  // risposta dopo `softMs` al massimo; il resto prosegue in `done`
+  await Promise.race([done, new Promise((r) => setTimeout(r, softMs))]);
+  return { done };
 }
