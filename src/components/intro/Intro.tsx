@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import { animate, motion, useMotionValue, useTransform, type AnimationPlaybackControls } from "motion/react";
 import DevPause from "./DevPause";
-import { windowLabel, type Signal, type SignalsResponse } from "@/lib/signals";
-import { useOpeningCategories } from "../splash/news";
-import CodeRain from "../splash/CodeRain";
-import Tiles from "./tiles";
+import Radar, { type RadarData } from "./Radar";
+import Wordmark from "@/components/ui/Wordmark";
+import { buildLaps, interleave } from "./radar-model";
+import type { Signal, SignalsResponse } from "@/lib/signals";
+import { LANGUAGES, langLabel } from "@/lib/languages";
+import { radar, useLang } from "@/lib/store";
 import {
-  ACCENT_SERIF,
   ART_H,
   ART_W,
   BAR_SECONDS,
-  DISPLAY,
-  MARKER,
   MONO,
   PEEL_AT,
   REVEAL_AT,
@@ -21,32 +20,29 @@ import {
   STRIPE_SECONDS,
   STRIPE_STAGGER,
   TOTAL_SECONDS,
-  backOut,
   clamp01,
   easeInOut,
   easeOut,
+  DISPLAY,
   type Time,
 } from "./timeline";
 
 /*
-  Intro animata di Radar: un POSTER GIALLO da 8,5 secondi (la barra di caricamento), poi tre strisce
-  colorate lo "strappano" via e scoprono la schermata iniziale (Splash, scura, con il radar).
-  Apposta è l'opposto dello Splash: fondo giallo pieno, niente radar, scritte giganti.
+  Intro animata di Radar: un RADAR su fondo scuro da 8,5 secondi (la barra di caricamento), poi tre strisce
+  colorate lo "strappano" via e scoprono la schermata iniziale (Splash).
 
-  Cosa si vede (il tempo è quello dell'orologio unico `time`):
-    0,5 – 2,8 s  le parole "L'AI / CHE / CONTA." salgono una alla volta (lente, una ogni 0,6 s)
-    2,3 – 3,6 s  arrivano il contatore, la frase d'accento e il nastro
-    2,8 – 4,6 s  i 4 formati del feed (due file) arrivano dai lati come adesivi, uno ogni 0,6 s, ognuno con la sua micro-animazione
-    7,4 s        adesivo "SI PARTE!"
-    8,5 s        barra al 100%: l'orologio si ferma e compaiono "Tocca per continuare" e "Imposta lingua"
+  Cosa si vede (il tempo è quello dell'orologio unico `time`; il disegno vive in Radar.tsx, i numeri in radar-model.ts):
+    0 – 1,2 s    gli anelli del radar (gigante, tagliato ai bordi) si disegnano, poi il numero al centro
+    1 – 8,5 s    la lancetta gira 3 volte; a ogni puntino catturato il contatore sale e a volte compare un contenuto vero
+    8,5 s        barra al 100%: la lancetta si ferma, l'orologio aspetta e compaiono "Tocca per continuare" e "Imposta lingua"
     dopo il tocco  strappo a strisce (circa 1 s) → schermata iniziale
 
-  Contatore e blocchi mostrano dati VERI (quanti contenuti ha raccolto Radar e gli ultimi per formato,
-  da /api/signals): se il database non risponde, il contatore dice "—" e i blocchi non compaiono.
-  Solo la barra è grafica: è a tempo fisso.
+  Contatore ed etichette mostrano dati VERI (da /api/signals): le tre finestre (30 min, 3 ore, 24 ore) sono i tre giri.
+  Se il database non risponde il contatore dice "—" e non ci sono etichette. Solo la barra è grafica: è a tempo fisso.
 */
 
 const INK = "var(--color-card-ink)";
+const BG = "var(--color-bg)";
 const YELLOW = "var(--color-card-article)";
 const CREAM = "var(--color-cream)";
 const ACCENT = "var(--color-accent)";
@@ -54,261 +50,20 @@ const GREEN = "var(--color-card-audio)";
 
 type Geometry = RefObject<{ w: number; h: number }>;
 
-// ---------- le tre parole giganti ----------
-function Word({ time, at, instant, children }: { time: Time; at: number; instant: boolean; children: ReactNode }) {
-  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - at) / 1.1)));
-  const y = useTransform(time, (t) => `${(1 - p(t)) * 118}%`);
-  const rotate = useTransform(time, (t) => (1 - p(t)) * 7);
-  return (
-    <div style={{ overflow: "hidden", padding: "2px 0" }}>
-      <motion.div style={{ y, rotate, transformOrigin: "0 100%" }}>{children}</motion.div>
-    </div>
-  );
-}
-
-function Headline({ time, live, instant }: { time: Time; live: Time; instant: boolean }) {
-  // `live` e' l'orologio che non si ferma mai: il blocco nero "CONTA." continua a dondolare a caricamento finito
-  const blockRotate = useTransform(live, (t) => -1.5 + (instant ? 0 : Math.sin(t * 2.4) * 1.1));
-  const blockScale = useTransform(live, (t) => (instant ? 1 : 1 + Math.sin(t * 1.6 + 1) * 0.015));
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 24,
-        top: 76,
-        fontFamily: DISPLAY,
-        fontWeight: 800,
-        fontSize: 88,
-        lineHeight: 0.9,
-        letterSpacing: "-0.055em",
-        color: INK,
-      }}
-    >
-      <Word time={time} at={0.5} instant={instant}>
-        L&apos;AI
-      </Word>
-      <Word time={time} at={1.1} instant={instant}>
-        CHE
-      </Word>
-      <Word time={time} at={1.7} instant={instant}>
-        <motion.span
-          style={{ display: "inline-block", padding: "0 12px 6px", background: INK, color: YELLOW, rotate: blockRotate, scale: blockScale }}
-        >
-          CONTA.
-        </motion.span>
-      </Word>
-    </div>
-  );
-}
-
-// frase d'accento accanto a "CHE"
-function Phrase({ time, live, instant }: { time: Time; live: Time; instant: boolean }) {
-  const p = (t: number) => (instant ? 1 : easeOut(clamp01((t - 2.9) / 0.8)));
-  const opacity = useTransform(time, (t) => p(t));
-  const y = useTransform([time, live], ([t, l]: number[]) => 14 * (1 - p(t)) + (instant ? 0 : Math.sin(l * 1.3) * 2.5));
-  return (
-    <motion.p
-      style={{
-        position: "absolute",
-        left: 218,
-        top: 190,
-        width: 150,
-        margin: 0,
-        fontFamily: ACCENT_SERIF,
-        fontStyle: "italic",
-        fontSize: 23,
-        lineHeight: 1.02,
-        color: INK,
-        opacity,
-        y,
-      }}
-    >
-      il tuo radar sull&apos;AI.
-    </motion.p>
-  );
-}
-
-// ---------- contatore "segnali rilevati": adesivo nero accanto a "L'AI" ----------
-// Il numero è VERO: quanti segnali sono arrivati in Radar nella finestra di tempo scritta sotto
-// ("negli ultimi 15 minuti"…), letti dal database tramite /api/signals.
-// Sale da 0 al numero durante il caricamento. Se il database non risponde, mostra "—" invece di inventare.
-type SignalsState = "loading" | "ok" | "error";
-
-function Counter({
-  time,
-  live,
-  total,
-  state,
-  windowText,
-}: {
-  time: Time;
-  live: Time;
-  total: Time;
-  state: SignalsState;
-  windowText: string;
-}) {
-  const n = useTransform([time, total], ([t, tot]: number[]) => {
-    const p = clamp01((t - 2.4) / 5.0);
-    return String(Math.round(tot * (1 - (1 - p) * (1 - p))));
-  });
-  const scale = useTransform(time, (t) => backOut(clamp01((t - 2.3) / 0.7)));
-  // se i segnali superano 9999 il numero si rimpicciolisce per restare dentro l'adesivo
-  const wobble = useTransform(live, (l) => 4 + Math.sin(l * 1.9) * 1.8);
-  const bob = useTransform(live, (l) => Math.sin(l * 1.4 + 2) * 3);
-  const numberSize = useTransform(total, (v) => (v >= 10000 ? 34 : 44));
+// ---------- il nome dell'app, in alto al centro (sotto la Dynamic Island) ----------
+function Title({ time, reduce }: { time: Time; reduce: boolean }) {
+  const opacity = useTransform(time, (t) => (reduce ? 1 : easeOut(clamp01(t / 0.6))));
+  const y = useTransform(time, (t) => (reduce ? 0 : -12 * (1 - easeOut(clamp01(t / 0.6)))));
   return (
     <motion.div
-      style={{
-        position: "absolute",
-        left: 236,
-        top: 84,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        padding: "8px 12px 9px",
-        background: INK,
-        boxShadow: `4px 4px 0 ${ACCENT}`,
-        color: CREAM,
-        rotate: wobble,
-        y: bob,
-        scale,
-        opacity: scale,
-      }}
+      style={{ position: "absolute", left: 0, top: 58, width: ART_W, textAlign: "center", color: CREAM, fontSize: 32, lineHeight: 1, opacity, y }}
     >
-      <motion.b
-        style={{
-          fontFamily: DISPLAY,
-          fontWeight: 800,
-          fontSize: numberSize,
-          lineHeight: 0.9,
-          letterSpacing: "-0.05em",
-          color: YELLOW,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {state === "error" ? "—" : n}
-      </motion.b>
-      <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 8.5, lineHeight: 1.1, letterSpacing: "0.12em" }}>
-        SEGNALI RILEVATI
-      </span>
-      {state === "ok" && windowText && (
-        <span
-          style={{
-            fontFamily: MONO,
-            fontWeight: 600,
-            fontSize: 7.5,
-            lineHeight: 1.1,
-            letterSpacing: "0.06em",
-            color: YELLOW,
-            textTransform: "uppercase",
-          }}
-        >
-          {windowText}
-        </span>
-      )}
+      <Wordmark />
     </motion.div>
   );
 }
 
-// ---------- nastro nero con i temi che scorre ----------
-function Tape({ time, live }: { time: Time; live: Time }) {
-  const group = useRef<HTMLDivElement>(null);
-  // i settori AI (tutti, dallo stesso elenco della raccolta) in un ordine diverso a ogni apertura;
-  // se ne mostrano 30, più che sufficienti per tutta la durata dell'intro
-  const all = useOpeningCategories();
-  const topics = useMemo(() => [...all].reverse().slice(0, 30), [all]);
-  const enter = useTransform(time, (t) => -1000 * (1 - easeOut(clamp01((t - 2.6) / 1.0))));
-  const scroll = useTransform(live, (t) => -((t * 55) % (group.current?.offsetWidth || 900)));
-  return (
-    <motion.div
-      style={{
-        position: "absolute",
-        left: -220, // 200 in più per lato: anche quando l'artboard è più stretto dello schermo il nastro arriva ai bordi
-        top: 338,
-        width: 830,
-        height: 28,
-        display: "flex",
-        alignItems: "center",
-        overflow: "hidden",
-        background: INK,
-        color: YELLOW,
-        rotate: -2.5,
-        x: enter,
-      }}
-    >
-      <motion.div style={{ display: "flex", width: "max-content", x: scroll }}>
-        {[0, 1].map((g) => (
-          <div key={g} ref={g === 0 ? group : undefined} style={{ display: "flex", flex: "none" }}>
-            {topics.map((topic, i) => (
-              <span
-                key={topic}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  paddingRight: 10,
-                  whiteSpace: "nowrap",
-                  fontFamily: MONO,
-                  fontWeight: 700,
-                  fontSize: 11,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {topic}
-                <i
-                  style={{
-                    display: "block",
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    background: i % 2 ? ACCENT : CREAM,
-                  }}
-                />
-              </span>
-            ))}
-          </div>
-        ))}
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// ---------- adesivo "SI PARTE!" sul blocco CONTA. ----------
-function GoSticker({ time, live }: { time: Time; live: Time }) {
-  const p = (t: number) => backOut(clamp01((t - (BAR_SECONDS - 1.1)) / 0.45));
-  const scale = useTransform(time, (t) => p(t));
-  const rotate = useTransform([time, live], ([t, l]: number[]) => -8 + 24 * (1 - p(t)) + Math.sin(l * 3) * 3);
-  const pop = useTransform([time, live], ([t, l]: number[]) => p(t) * (1 + Math.sin(l * 3 + 1) * 0.06));
-  return (
-    <motion.span
-      style={{
-        position: "absolute",
-        left: 318,
-        top: 246,
-        padding: "3px 12px",
-        border: `3px solid ${INK}`,
-        borderRadius: 999,
-        background: ACCENT,
-        boxShadow: `3px 3px 0 ${INK}`,
-        color: INK,
-        fontFamily: MARKER,
-        fontSize: 19,
-        lineHeight: 1.2,
-        whiteSpace: "nowrap",
-        x: "-50%",
-        y: "-50%",
-        scale: pop,
-        opacity: scale,
-        rotate,
-      }}
-    >
-      SI PARTE!
-    </motion.span>
-  );
-}
-
-// ---------- barra di caricamento: 5 secondi esatti ----------
+// ---------- barra di caricamento: 8,5 secondi esatti ----------
 const STATUS = [
   { from: 0, text: "CAPTO SEGNALI…" },
   { from: 0.25, text: "LEGGO LE FONTI…" },
@@ -340,7 +95,7 @@ function Bar({ time, live }: { time: Time; live: Time }) {
           fontSize: 11,
           lineHeight: 1,
           letterSpacing: "0.14em",
-          color: INK,
+          color: CREAM,
         }}
       >
         <motion.span>{status}</motion.span>
@@ -351,9 +106,9 @@ function Bar({ time, live }: { time: Time; live: Time }) {
           height: 28,
           boxSizing: "border-box",
           overflow: "hidden",
-          border: `3px solid ${INK}`,
-          background: CREAM,
-          boxShadow: `4px 4px 0 ${INK}`,
+          border: `3px solid ${CREAM}`,
+          background: "rgba(255,253,245,0.06)",
+          boxShadow: `4px 4px 0 ${ACCENT}`,
         }}
       >
         <Pixels time={time} live={live} />
@@ -370,12 +125,12 @@ const CELLS = 28;
 function PixelCell({ time, live, i }: { time: Time; live: Time; i: number }) {
   const backgroundColor = useTransform([time, live], ([t, l]: number[]) => {
     const filled = (clamp01(t / BAR_SECONDS) * CELLS) > i;
-    if (!filled) return "rgba(0,0,0,0.1)";
+    if (!filled) return "rgba(255,253,245,0.1)";
     // pixel corallo che corre su e giù per la fila (ping-pong)
     const span = CELLS + 6;
     const x = ((l * 16) % (span * 2));
     const pos = (x < span ? x : span * 2 - x) - 3;
-    return Math.abs(pos - i) < 1.2 ? "var(--color-accent)" : "#161616";
+    return Math.abs(pos - i) < 1.2 ? "var(--color-accent)" : "var(--color-card-article)";
   });
   const opacity = useTransform([time, live], ([t, l]: number[]) => {
     const f = clamp01(t / BAR_SECONDS) * CELLS;
@@ -414,6 +169,7 @@ function ContinueHint() {
           gap: 9,
           padding: "8px 16px",
           background: INK,
+          border: `2px solid ${GREEN}`,
           color: YELLOW,
           boxShadow: `4px 4px 0 ${GREEN}`,
           fontFamily: MONO,
@@ -423,15 +179,15 @@ function ContinueHint() {
           textTransform: "uppercase",
         }}
       >
-        <i style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: GREEN }} />
+        <i style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: GREEN, boxShadow: `0 0 8px ${GREEN}` }} />
         Tocca per continuare
       </motion.span>
     </motion.div>
   );
 }
 
-// ---------- pulsante "Imposta lingua" (per ora senza funzione: dice che le lingue arrivano dopo) ----------
-function LanguageButton({ note, onPress }: { note: boolean; onPress: () => void }) {
+// ---------- pulsante lingua: mostra la lingua attuale, un tocco passa alla successiva ----------
+function LanguageButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -465,7 +221,7 @@ function LanguageButton({ note, onPress }: { note: boolean; onPress: () => void 
           boxSizing: "border-box",
           border: `3px solid ${INK}`,
           background: CREAM,
-          boxShadow: `3px 3px 0 ${INK}`,
+          boxShadow: `3px 3px 0 ${ACCENT}`,
           color: INK,
           fontFamily: MONO,
           fontWeight: 700,
@@ -480,19 +236,14 @@ function LanguageButton({ note, onPress }: { note: boolean; onPress: () => void 
           <ellipse cx="12" cy="12" rx="4" ry="9.5" />
           <path d="M2.5 12h19" />
         </svg>
-        Imposta lingua
+        {label}
       </button>
-      {note && (
-        <span role="status" style={{ fontFamily: MONO, fontWeight: 600, fontSize: 9, letterSpacing: "0.06em", color: INK }}>
-          IN ARRIVO · PER ORA SOLO ITALIANO
-        </span>
-      )}
     </motion.div>
   );
 }
 
 // ---------- strappo: tre strisce colorate attraversano lo schermo ----------
-const STRIPE_COLORS = [INK, CREAM, ACCENT]; // dal fondo alla cima: l'ultima a restare è quella nera, come lo sfondo dello Splash
+const STRIPE_COLORS = [BG, CREAM, ACCENT]; // dal fondo alla cima: l'ultima a restare è quella scura, come lo sfondo dello Splash
 
 // zona dello schermo senza le fasce di sistema dell'iPhone (in alto iOS 26 sfoca): qui sta tutto il disegno dell'intro
 const SAFE_ZONE: CSSProperties = {
@@ -546,11 +297,11 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const reduce = usePrefersReducedMotion();
   const time = useMotionValue(0);
   const live = useMotionValue(0); // orologio libero: non si ferma mai (a differenza di time), guida i movimenti che continuano dopo il caricamento
-  const total = useMotionValue(0); // numero vero di segnali raccolti (0 finché la risposta non arriva)
-  const [signals, setSignals] = useState<SignalsState>("loading");
-  const [windowText, setWindowText] = useState(""); // es. "negli ultimi 15 minuti"
-  const [windows, setWindows] = useState<{ seconds: number; count: number }[]>([]); // conteggi veri per finestra, in ordine misto
-  const [items, setItems] = useState<Signal[]>([]); // gli ultimi contenuti veri, uno per formato (vuoto se il database non risponde)
+  const sweep = useMotionValue(0); // orologio della lancetta del radar: come `time` fino a fine caricamento, poi continua da solo
+  // numeri veri per il radar: stanno in un riferimento (così i calcoli leggono sempre l'ultimo valore)
+  // e `version` avvisa il radar quando cambiano, anche se l'orologio è fermo
+  const radarData = useRef<RadarData>({ state: "loading", laps: [], pool: [] });
+  const version = useMotionValue(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const safeRef = useRef<HTMLDivElement>(null); // area senza le fasce di sistema dell'iPhone
   const controlsRef = useRef<AnimationPlaybackControls | null>(null);
@@ -558,7 +309,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const [scale, setScale] = useState(0); // 0 = non ancora misurato (resta nascosto)
   const [ready, setReady] = useState(false); // barra al 100%: l'intro aspetta un tocco
   const [go, setGo] = useState(false); // toccato: partono le strisce
-  const [langNote, setLangNote] = useState(false);
+  const lang = useLang();
   const releasedRef = useRef(false);
   const readyRef = useRef(false);
 
@@ -585,49 +336,48 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     fetch("/api/signals", { signal: request.signal, cache: "no-store" })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("risposta non valida"))))
       .then((data: Partial<SignalsResponse>) => {
-        if (typeof data.count !== "number") throw new Error("numero mancante");
         if (!Array.isArray(data.windows) || data.windows.length === 0) throw new Error("finestre mancanti");
-        setWindows(data.windows);
-        total.set(data.windows[0].count);
-        setWindowText(windowLabel(data.windows[0].seconds));
-        setItems(Array.isArray(data.items) ? data.items : []);
-        setSignals("ok");
+        const items: Signal[] = Array.isArray(data.items) ? data.items : [];
+        radarData.current = { state: "ok", laps: buildLaps(data.windows), pool: interleave(items) };
+        version.set(version.get() + 1);
       })
       .catch(() => {
-        if (!request.signal.aborted) setSignals("error");
+        if (request.signal.aborted) return;
+        radarData.current = { state: "error", laps: [], pool: [] };
+        version.set(version.get() + 1);
       });
     return () => request.abort();
-  }, [total]);
-
-  // il contatore cambia finestra ogni 3,5 secondi (5 min, 3 ore, 30 min…): il numero scorre al nuovo valore
-  useEffect(() => {
-    if (windows.length < 2) return;
-    let i = 0;
-    const id = window.setInterval(() => {
-      i = (i + 1) % windows.length;
-      setWindowText(windowLabel(windows[i].seconds));
-      animate(total, windows[i].count, { duration: reduce ? 0 : 0.7, ease: "easeOut" });
-    }, 3500);
-    return () => window.clearInterval(id);
-  }, [windows, total, reduce]);
+  }, [version]);
 
   // orologio libero: avanza sempre, anche quando time aspetta il tocco. Con "Riduci movimento" resta fermo.
+  // Da qui si ricava anche l'orologio della lancetta (`sweep`): uguale a `time` finché dura il caricamento,
+  // poi continua da solo alla stessa velocità, così la lancetta del radar non si ferma mai.
   useEffect(() => {
     if (reduce) return;
     let raf = 0;
     const start = performance.now();
+    let endedAt: number | null = null; // secondo (di `live`) in cui la barra è arrivata al 100%
     const tick = (now: number) => {
-      live.set((now - start) / 1000);
+      const l = (now - start) / 1000;
+      live.set(l);
+      const t = time.get();
+      if (t < BAR_SECONDS) {
+        endedAt = null;
+        sweep.set(t);
+      } else {
+        if (endedAt === null) endedAt = l;
+        sweep.set(BAR_SECONDS + (l - endedAt));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [live, reduce]);
+  }, [live, time, sweep, reduce]);
 
   const handleReveal = useEffectEvent(onReveal);
   const handleDone = useEffectEvent(onDone);
 
-  // l'orologio: da 0 a 6 secondi, in linea retta
+  // l'orologio: da 0 a BAR_SECONDS, in linea retta; poi aspetta il tocco
   useEffect(() => {
     // /?intro-t=3.2 → ferma l'orologio al secondo 3,2 (serve a controllare un fotogramma)
     const frozen = new URLSearchParams(window.location.search).get("intro-t");
@@ -672,7 +422,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     };
   }, [time, reduce]);
 
-  // tocco dopo il caricamento: l'orologio riparte e le strisce strappano il poster
+  // tocco dopo il caricamento: l'orologio riparte e le strisce strappano la schermata
   const proceed = () => {
     if (!readyRef.current || releasedRef.current) return;
     releasedRef.current = true;
@@ -680,13 +430,13 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     controlsRef.current?.play();
   };
 
-  // "Imposta lingua": per ora solo un avviso (le lingue arrivano dopo)
+  // lingua: ogni tocco passa alla successiva dell'elenco (la scelta si salva da sola, anche nell'account)
   const pressLanguage = () => {
-    setLangNote(true);
-    window.setTimeout(() => setLangNote(false), 2600);
+    const at = LANGUAGES.findIndex((l) => l.code === lang);
+    radar.setLang(LANGUAGES[(at + 1) % LANGUAGES.length].code);
   };
 
-  // il poster sparisce quando le strisce lo coprono del tutto (o si dissolve, con "Riduci movimento")
+  // la schermata sparisce quando le strisce la coprono del tutto (o si dissolve, con "Riduci movimento")
   const posterOpacity = useTransform(time, (t) =>
     reduce ? 1 - clamp01((t - BAR_SECONDS) / 0.4) : t < REVEAL_AT ? 1 : 0,
   );
@@ -701,33 +451,13 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
         inset: 0,
         zIndex: 110,
         // "lvh" e non "dvh": aprendo l'app dalla Home, iOS per un attimo misura lo schermo più corto
-        // e sotto il giallo restava una striscia nera; lvh è sempre l'altezza piena
+        // e sotto restava una striscia di colore diverso; lvh è sempre l'altezza piena
         height: "100lvh",
         overflow: "hidden",
         fontFamily: DISPLAY,
       }}
     >
-      <motion.div style={{ position: "absolute", inset: 0, background: YELLOW, opacity: posterOpacity }}>
-        {/* sfondo di codice, lo stesso dello Splash ma inchiostro su giallo (stile in splash.css, ".intro-code") */}
-        {!reduce && (
-          <div
-            aria-hidden="true"
-            className="intro-code"
-            style={{ position: "absolute", inset: 0, containerType: "size" }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                // 1 unità Figma sullo schermo, come nello Splash
-                ["--u" as string]: "min(calc(100cqw / 390), calc(100cqh / 844))",
-              }}
-            >
-              <CodeRain />
-            </div>
-          </div>
-        )}
-
+      <motion.div style={{ position: "absolute", inset: 0, background: BG, opacity: posterOpacity }}>
         {/* zona sicura: niente contenuto sotto l'ora/batteria e la barra in basso.
             Su iOS 26 quella fascia in alto viene sfocata dal sistema. */}
         <div
@@ -748,16 +478,8 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
             visibility: scale > 0 ? "visible" : "hidden",
           }}
         >
-          <Headline time={time} live={live} instant={reduce} />
-          <Phrase time={time} live={live} instant={reduce} />
-          {!reduce && (
-            <>
-              <Counter time={time} live={live} total={total} state={signals} windowText={windowText} />
-              <Tape time={time} live={live} />
-              <Tiles time={time} live={live} items={items} />
-              <GoSticker time={time} live={live} />
-            </>
-          )}
+          <Radar time={time} live={live} sweep={sweep} data={radarData} version={version} reduce={reduce} />
+          <Title time={time} reduce={reduce} />
           <Bar time={time} live={live} />
           {ready && !go && <ContinueHint />}
         </div>
@@ -787,7 +509,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
                   pointerEvents: "none",
                 }}
               >
-                <LanguageButton note={langNote} onPress={pressLanguage} />
+                <LanguageButton label={langLabel(lang)} onPress={pressLanguage} />
               </div>
             </div>
           </>
