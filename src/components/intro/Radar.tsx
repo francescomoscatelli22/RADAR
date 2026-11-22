@@ -2,11 +2,9 @@
 
 import { useMemo, type RefObject } from "react";
 import { motion, useTransform, type MotionValue } from "motion/react";
-import { windowLabel } from "@/lib/signals";
 import type { Signal } from "@/lib/signals";
 import {
   BLIP_LIFE,
-  CARD_H,
   CARD_LIFE,
   CARD_W,
   CX,
@@ -17,40 +15,33 @@ import {
   SCOPE_R,
   blipGeo,
   blipNow,
+  cardHeight,
   cardSlot,
-  counterBump,
-  counterValue,
   itemOf,
   kindOf,
   labeledGeo,
   labeledNow,
   sweepAngle,
-  windowSeconds,
-  type Lap,
 } from "./radar-model";
 import { ART_W, DISPLAY, MONO, backOut, clamp01, easeOut, type Time } from "./timeline";
 
 /*
   La scena dell'intro: uno schermo radar tondo (come un vero PPI), su fondo scuro.
   Bordo con scala dei gradi, anelli di distanza, mirino con le tacche, lancetta gialla con una scia lunga e morbida.
-  La lancetta non si ferma mai, un giro ogni 3 secondi. A ogni giro nascono puntini NUOVI in posti diversi: si accendono
-  al passaggio della lancetta e poi svaniscono (non restano fermi). Due puntini a giro mostrano anche un contenuto
+  La lancetta non si ferma mai e gira piano, un giro ogni 5 secondi. A ogni giro nascono puntini NUOVI in posti diversi:
+  si accendono al passaggio della lancetta e poi svaniscono piano (non restano fermi). Due puntini a giro mostrano anche un contenuto
   vero: una scheda dello stesso colore del puntino, in un altro punto sopra il radar, collegata da una linea.
-  Il numero dei segnali raccolti sta sopra lo schermo: a ogni giro cambia finestra di tempo (15 min, 30 min, 1 ora…
-  24 ore e poi indietro) e sale o scende al valore VERO, un passo a ogni puntino catturato.
   Tutto si calcola da due orologi: `time` (l'intro) e `sweep` (la lancetta, che a fine caricamento continua da sola);
   i dati arrivano da /api/signals (vedi Intro.tsx).
-  Con "Riduci movimento": schermo e numero massimo fermi, niente lancetta né puntini.
+  Con "Riduci movimento": schermo fermo, niente lancetta né puntini.
 */
 
 const INK = "var(--color-card-ink)";
 const CREAM = "var(--color-cream)";
-const ACCENT = "var(--color-accent)";
 const YELLOW = "var(--color-card-article)";
 
 export type RadarData = {
   state: "loading" | "ok" | "error";
-  laps: Lap[]; // tutte le finestre di tempo con i numeri veri, dalla più corta alla più lunga (vuoto finché non arrivano)
   pool: Signal[]; // contenuti veri in ordine "a rotazione" tra i formati (vuoto se il database non risponde)
 };
 
@@ -238,41 +229,41 @@ function BlipSlot({ i, sweep, data, version }: SlotProps & { i: number }) {
 
   const x = useTransform(sweep, (s) => {
     const g = gAt(s);
-    return g < 0 ? -60 : CX + blipGeo(g).x - 11;
+    return g < 0 ? -60 : CX + blipGeo(g).x - 18;
   });
   const y = useTransform(sweep, (s) => {
     const g = gAt(s);
-    return g < 0 ? -60 : CY + blipGeo(g).y - 11;
+    return g < 0 ? -60 : CY + blipGeo(g).y - 18;
   });
   // stesso colore della scheda collegata: segue il formato del contenuto vero
   const color = useTransform([sweep, version], ([s]: number[]) => KIND_COLOR[kindOf(gAt(s), data.current.pool)]);
-  const glow = useTransform(color, (c) => `0 0 10px 2px ${c}`);
+  const glow = useTransform(color, (c) => `0 0 16px 3px ${c}`);
 
   const dotScale = useTransform(sweep, (s) => {
     const age = ageAt(s);
-    return age < 0 ? 0 : backOut(clamp01(age / 0.3)) * (1 + 0.3 * Math.exp(-age / 0.2));
+    return age < 0 ? 0 : backOut(clamp01(age / 0.55)) * (1 + 0.3 * Math.exp(-age / 0.35));
   });
   const dotOpacity = useTransform(sweep, (s) => {
     const age = ageAt(s);
     if (age < 0 || age > BLIP_LIFE) return 0;
     // si accende di colpo, si smorza piano (fosforo) e svanisce del tutto prima del giro dopo
-    return (0.12 + 0.88 * Math.exp(-age / 0.75)) * (1 - clamp01((age - (BLIP_LIFE - 0.5)) / 0.5));
+    return (0.12 + 0.88 * Math.exp(-age / 1.3)) * (1 - clamp01((age - (BLIP_LIFE - 0.9)) / 0.9));
   });
-  const pingScale = useTransform(sweep, (s) => 1 + 3 * easeOut(clamp01(ageAt(s) / 1.0)));
+  const pingScale = useTransform(sweep, (s) => 1 + 3 * easeOut(clamp01(ageAt(s) / 1.8)));
   const pingOpacity = useTransform(sweep, (s) => {
     const age = ageAt(s);
-    return age < 0 || age > 1 ? 0 : 0.9 * (1 - age);
+    return age < 0 || age > 1.8 ? 0 : 0.9 * (1 - age / 1.8);
   });
 
   return (
-    <motion.div aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, width: 22, height: 22, x, y, pointerEvents: "none" }}>
+    <motion.div aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, width: 36, height: 36, x, y, pointerEvents: "none" }}>
       <motion.i
         style={{
           position: "absolute",
           inset: 0,
           boxSizing: "border-box",
           borderRadius: "50%",
-          border: "2px solid",
+          border: "2.5px solid",
           borderColor: color,
           scale: pingScale,
           opacity: pingOpacity,
@@ -281,10 +272,10 @@ function BlipSlot({ i, sweep, data, version }: SlotProps & { i: number }) {
       <motion.i
         style={{
           position: "absolute",
-          left: 6,
-          top: 6,
-          width: 10,
-          height: 10,
+          left: 9,
+          top: 9,
+          width: 18,
+          height: 18,
           borderRadius: "50%",
           background: color,
           boxShadow: glow,
@@ -306,6 +297,8 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
     const e = labeledNow(s);
     return e < 0 ? -1 : e - mod(e - j, CARD_POOL);
   };
+  // posto della scheda e sua altezza (dipende da quanto è lungo il titolo)
+  const slotAt = (e: number) => cardSlot(e, cardHeight(itemOf(e, data.current.pool)));
   const itemAt = (s: number) => {
     const e = ellAt(s);
     return e < 0 ? undefined : itemOf(e, data.current.pool);
@@ -317,17 +310,17 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
   // 0 = invisibile, 1 = piena (sale di colpo con un rimbalzo e scende alla fine)
   const show = (s: number) => {
     const age = ageAt(s);
-    if (age < 0.12 || age > CARD_LIFE || !itemAt(s)) return 0;
-    return clamp01(backOut(clamp01((age - 0.12) / 0.3))) * (1 - clamp01((age - (CARD_LIFE - 0.25)) / 0.25));
+    if (age < 0.2 || age > CARD_LIFE || !itemAt(s)) return 0;
+    return clamp01(backOut(clamp01((age - 0.2) / 0.5))) * (1 - clamp01((age - (CARD_LIFE - 0.45)) / 0.45));
   };
 
   const x = useTransform(sweep, (s) => {
     const e = ellAt(s);
-    return e < 0 ? -400 : cardSlot(e).left;
+    return e < 0 ? -400 : slotAt(e).left;
   });
   const y = useTransform(sweep, (s) => {
     const e = ellAt(s);
-    return e < 0 ? -400 : cardSlot(e).top;
+    return e < 0 ? -400 : slotAt(e).top;
   });
   const opacity = useTransform(sweep, show);
   const scale = useTransform(sweep, (s) => 0.75 + 0.25 * show(s));
@@ -346,11 +339,12 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
     const e = ellAt(s);
     if (e < 0) return { bx: 0, by: 0, len: 0, ang: 0 };
     const b = labeledGeo(e);
-    const slot = cardSlot(e);
+    const slot = slotAt(e);
+    const h = cardHeight(itemOf(e, data.current.pool));
     const bx = CX + b.x;
     const by = CY + b.y;
     const qx = Math.min(slot.left + CARD_W, Math.max(slot.left, bx));
-    const qy = Math.min(slot.top + CARD_H, Math.max(slot.top, by));
+    const qy = Math.min(slot.top + h, Math.max(slot.top, by));
     return { bx, by, len: Math.hypot(qx - bx, qy - by), ang: (Math.atan2(qy - by, qx - bx) * 180) / Math.PI };
   };
   const lx = useTransform(sweep, (s) => link(s).bx);
@@ -372,12 +366,11 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
           left: 0,
           top: 0,
           width: CARD_W,
-          height: CARD_H,
           boxSizing: "border-box",
-          padding: "5px 8px",
+          padding: "8px 12px",
           background: color,
           border: `2px solid ${INK}`,
-          boxShadow: `3px 3px 0 ${CREAM}`,
+          boxShadow: `4px 4px 0 ${CREAM}`,
           color: INK,
           x,
           y,
@@ -394,7 +387,7 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
             whiteSpace: "nowrap",
             fontFamily: MONO,
             fontWeight: 700,
-            fontSize: 8,
+            fontSize: 10,
             lineHeight: 1.2,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
@@ -404,15 +397,15 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
         </motion.span>
         <motion.b
           style={{
-            display: "block",
+            display: "-webkit-box",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: 5,
             overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            marginTop: 2,
+            marginTop: 3,
             fontFamily: DISPLAY,
             fontWeight: 800,
-            fontSize: 12.5,
-            lineHeight: 1.2,
+            fontSize: 15,
+            lineHeight: "18px",
             letterSpacing: "-0.01em",
           }}
         >
@@ -423,84 +416,9 @@ function CardSlot({ j, sweep, data, version }: SlotProps & { j: number }) {
   );
 }
 
-// ---------- il numero, sopra lo schermo ----------
-function Counter({ time, sweep, data, version, reduce }: Pick<Props, "time" | "sweep" | "data" | "version" | "reduce">) {
-  const maxCount = () => {
-    const d = data.current;
-    return d.state === "ok" && d.laps.length > 0 ? d.laps[d.laps.length - 1].count : 0;
-  };
-  const text = useTransform([sweep, version], ([s]: number[]) => {
-    const d = data.current;
-    if (d.state === "error") return "—";
-    if (d.state !== "ok") return "0";
-    // con "Riduci movimento" niente conteggio: si mostra il numero più grande (le ultime 24 ore)
-    return String(Math.round(reduce ? maxCount() : counterValue(s, d.laps)));
-  });
-  // la grandezza segue il numero più GRANDE tra le finestre, così il testo non cambia misura a ogni giro
-  const size = useTransform([time, version], () => {
-    const digits = String(maxCount()).length;
-    return digits <= 2 ? 112 : digits === 3 ? 100 : digits === 4 ? 84 : 68;
-  });
-  const bump = useTransform(sweep, (s) => (reduce ? 1 : 1 + 0.06 * counterBump(s)));
-  const appear = useTransform(time, (t) => (reduce ? 1 : easeOut(clamp01((t - 0.6) / 0.5))));
-  const windowText = useTransform([sweep, version], ([s]: number[]) => {
-    const d = data.current;
-    const seconds = d.state === "ok" ? windowSeconds(reduce ? 1e9 : s, d.laps) : null;
-    return seconds === null ? "" : windowLabel(seconds).toUpperCase();
-  });
-  const labelText = useTransform([time, version], (): string =>
-    data.current.state === "error" ? "SEGNALI NON DISPONIBILI" : "SEGNALI RILEVATI",
-  );
-
-  return (
-    <motion.div
-      style={{
-        position: "absolute",
-        left: 0,
-        top: 112,
-        width: ART_W,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 7,
-        opacity: appear,
-        pointerEvents: "none",
-      }}
-    >
-      <motion.span
-        style={{ fontFamily: MONO, fontWeight: 700, fontSize: 11, lineHeight: 1, letterSpacing: "0.18em", color: CREAM }}
-      >
-        {labelText}
-      </motion.span>
-      <motion.b
-        style={{
-          display: "block",
-          height: 92,
-          fontFamily: DISPLAY,
-          fontWeight: 800,
-          fontSize: size,
-          lineHeight: 0.86,
-          letterSpacing: "-0.05em",
-          color: YELLOW,
-          textShadow: `5px 5px 0 ${ACCENT}`,
-          fontVariantNumeric: "tabular-nums",
-          scale: bump,
-        }}
-      >
-        {text}
-      </motion.b>
-      <motion.span
-        style={{ fontFamily: MONO, fontWeight: 600, fontSize: 9, lineHeight: 1, letterSpacing: "0.08em", color: YELLOW, height: 9 }}
-      >
-        {windowText}
-      </motion.span>
-    </motion.div>
-  );
-}
-
 // ---------- il centro: un puntino fisso e un "ping" che si ripete (orologio libero) ----------
 function Hub({ time, live, reduce }: { time: Time; live: Time; reduce: boolean }) {
-  const phase = (l: number) => (l * 0.5) % 1;
+  const phase = (l: number) => (l * 0.3) % 1;
   const scale = useTransform(live, (l) => 0.1 + 3.1 * easeOut(phase(l)));
   const opacity = useTransform([time, live], ([t, l]: number[]) => clamp01((t - 1) / 0.4) * 0.5 * (1 - phase(l)));
   return (
@@ -548,7 +466,6 @@ export default function Radar({ time, live, sweep, data, version, reduce }: Prop
       {!reduce && Array.from({ length: BLIP_POOL }, (_, i) => <BlipSlot key={i} i={i} sweep={sweep} data={data} version={version} />)}
       {!reduce && Array.from({ length: CARD_POOL }, (_, j) => <CardSlot key={j} j={j} sweep={sweep} data={data} version={version} />)}
       <Hub time={time} live={live} reduce={reduce} />
-      <Counter time={time} sweep={sweep} data={data} version={version} reduce={reduce} />
     </>
   );
 }

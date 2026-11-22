@@ -4,8 +4,9 @@ import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore, type
 import { animate, motion, useMotionValue, useTransform, type AnimationPlaybackControls } from "motion/react";
 import DevPause from "./DevPause";
 import Radar, { type RadarData } from "./Radar";
+import CodeRain from "../splash/CodeRain";
 import Wordmark from "@/components/ui/Wordmark";
-import { buildLaps, interleave } from "./radar-model";
+import { interleave } from "./radar-model";
 import type { Signal, SignalsResponse } from "@/lib/signals";
 import { LANGUAGES, langLabel } from "@/lib/languages";
 import { radar, useLang } from "@/lib/store";
@@ -24,6 +25,7 @@ import {
   easeInOut,
   easeOut,
   DISPLAY,
+  ACCENT_SERIF,
   type Time,
 } from "./timeline";
 
@@ -31,14 +33,15 @@ import {
   Intro animata di Radar: un RADAR su fondo scuro da 8,5 secondi (la barra di caricamento), poi tre strisce
   colorate lo "strappano" via e scoprono la schermata iniziale (Splash).
 
-  Cosa si vede (il tempo è quello dell'orologio unico `time`; il disegno vive in Radar.tsx, i numeri in radar-model.ts):
-    0 – 1,2 s    gli anelli del radar (gigante, tagliato ai bordi) si disegnano, poi il numero al centro
-    1 – 8,5 s    la lancetta gira 3 volte; a ogni puntino catturato il contatore sale e a volte compare un contenuto vero
-    8,5 s        barra al 100%: la lancetta si ferma, l'orologio aspetta e compaiono "Tocca per continuare" e "Imposta lingua"
+  Cosa si vede (il tempo è quello dell'orologio unico `time`; il disegno vive in Radar.tsx, i tempi in radar-model.ts):
+    0 – 1 s      appaiono il nome RAIDAR (grande, in alto) e lo schermo radar
+    1 s →        la lancetta gira piano e non si ferma mai (un giro ogni 5 s); a ogni giro nascono puntini nuovi che svaniscono
+                 e a volte compare una scheda con un contenuto vero, dello stesso colore del puntino
+    8,5 s        barra al 100%: l'orologio dell'intro aspetta e compaiono "Tocca per continuare" e il pulsante lingua
     dopo il tocco  strappo a strisce (circa 1 s) → schermata iniziale
 
-  Contatore ed etichette mostrano dati VERI (da /api/signals): le tre finestre (30 min, 3 ore, 24 ore) sono i tre giri.
-  Se il database non risponde il contatore dice "—" e non ci sono etichette. Solo la barra è grafica: è a tempo fisso.
+  Le schede mostrano contenuti VERI (da /api/signals). Se il database non risponde non ci sono schede.
+  Solo la barra è grafica: è a tempo fisso.
 */
 
 const INK = "var(--color-card-ink)";
@@ -56,10 +59,38 @@ function Title({ time, reduce }: { time: Time; reduce: boolean }) {
   const y = useTransform(time, (t) => (reduce ? 0 : -12 * (1 - easeOut(clamp01(t / 0.6)))));
   return (
     <motion.div
-      style={{ position: "absolute", left: 0, top: 58, width: ART_W, textAlign: "center", color: CREAM, fontSize: 32, lineHeight: 1, opacity, y }}
+      style={{ position: "absolute", left: 0, top: 82, width: ART_W, textAlign: "center", color: CREAM, fontSize: 68, lineHeight: 1, letterSpacing: "-0.03em", opacity, y }}
     >
       <Wordmark />
     </motion.div>
+  );
+}
+
+// ---------- sottotitolo, sotto il nome: dice in una riga cosa trovi nell'app ----------
+function Subtitle({ time, reduce }: { time: Time; reduce: boolean }) {
+  const p = (t: number) => (reduce ? 1 : easeOut(clamp01((t - 0.45) / 0.7)));
+  const opacity = useTransform(time, (t) => p(t));
+  const y = useTransform(time, (t) => 10 * (1 - p(t)));
+  return (
+    <motion.p
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 160,
+        width: ART_W,
+        margin: 0,
+        textAlign: "center",
+        fontFamily: ACCENT_SERIF,
+        fontStyle: "italic",
+        fontSize: 25,
+        lineHeight: 1.1,
+        color: CREAM,
+        opacity,
+        y,
+      }}
+    >
+      Il meglio dell&apos;<span style={{ color: YELLOW }}>AI</span>, in un posto solo.
+    </motion.p>
   );
 }
 
@@ -300,7 +331,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
   const sweep = useMotionValue(0); // orologio della lancetta del radar: come `time` fino a fine caricamento, poi continua da solo
   // numeri veri per il radar: stanno in un riferimento (così i calcoli leggono sempre l'ultimo valore)
   // e `version` avvisa il radar quando cambiano, anche se l'orologio è fermo
-  const radarData = useRef<RadarData>({ state: "loading", laps: [], pool: [] });
+  const radarData = useRef<RadarData>({ state: "loading", pool: [] });
   const version = useMotionValue(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const safeRef = useRef<HTMLDivElement>(null); // area senza le fasce di sistema dell'iPhone
@@ -330,20 +361,19 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
     return () => observer.disconnect();
   }, []);
 
-  // legge dal database quanti segnali ci sono davvero
+  // legge dal database gli ultimi contenuti veri (le schede sul radar)
   useEffect(() => {
     const request = new AbortController();
     fetch("/api/signals", { signal: request.signal, cache: "no-store" })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("risposta non valida"))))
       .then((data: Partial<SignalsResponse>) => {
-        if (!Array.isArray(data.windows) || data.windows.length === 0) throw new Error("finestre mancanti");
         const items: Signal[] = Array.isArray(data.items) ? data.items : [];
-        radarData.current = { state: "ok", laps: buildLaps(data.windows), pool: interleave(items) };
+        radarData.current = { state: "ok", pool: interleave(items) };
         version.set(version.get() + 1);
       })
       .catch(() => {
         if (request.signal.aborted) return;
-        radarData.current = { state: "error", laps: [], pool: [] };
+        radarData.current = { state: "error", pool: [] };
         version.set(version.get() + 1);
       });
     return () => request.abort();
@@ -458,6 +488,22 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
       }}
     >
       <motion.div style={{ position: "absolute", inset: 0, background: BG, opacity: posterOpacity }}>
+        {/* sfondo di codice che scorre piano, lo stesso della schermata successiva (Splash) */}
+        {!reduce && (
+          <div aria-hidden="true" className="splash-dotlayer" style={{ containerType: "size" }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                // 1 unità Figma sullo schermo, come nello Splash
+                ["--u" as string]: "min(calc(100cqw / 390), calc(100cqh / 844))",
+              }}
+            >
+              <CodeRain />
+            </div>
+          </div>
+        )}
+
         {/* zona sicura: niente contenuto sotto l'ora/batteria e la barra in basso.
             Su iOS 26 quella fascia in alto viene sfocata dal sistema. */}
         <div
@@ -480,6 +526,7 @@ export default function Intro({ onReveal, onDone }: { onReveal: () => void; onDo
         >
           <Radar time={time} live={live} sweep={sweep} data={radarData} version={version} reduce={reduce} />
           <Title time={time} reduce={reduce} />
+          <Subtitle time={time} reduce={reduce} />
           <Bar time={time} live={live} />
           {ready && !go && <ContinueHint />}
         </div>

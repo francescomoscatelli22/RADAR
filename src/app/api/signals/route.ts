@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { RECENT_WINDOWS, type Signal, type SignalKind, type SignalsResponse } from "@/lib/signals";
+import type { Signal, SignalKind, SignalsResponse } from "@/lib/signals";
 
 /*
-  Dati VERI per l'intro: quanti contenuti ha raccolto Radar e gli ultimi per ogni formato.
+  Dati VERI per l'intro: gli ultimi contenuti raccolti da Radar per ogni formato (le schede sul radar).
   Il database ha la sicurezza a livello di riga (RLS) attiva e nessuna regola di lettura,
   quindi il browser non può leggerlo da solo: lo legge questo server con la chiave di servizio
   (che non lascia mai il server) e restituisce solo titoli, fonti e numeri.
@@ -57,39 +57,20 @@ export async function GET() {
       .not("title", "match", "^b[0-9]+")
       .limit(n);
 
-  // quanti segnali sono arrivati in ogni finestra di tempo (si conta soltanto, senza scaricare righe)
-  const now = Date.now();
-  const windowCounts = Promise.all(
-    RECENT_WINDOWS.map(async (seconds) => {
-      const since = new Date(now - seconds * 1000).toISOString();
-      // si conta per data di PUBBLICAZIONE (quando il contenuto è uscito davvero), non per data di raccolta:
-      // altrimenti un caricamento in blocco dell'archivio sembrerebbe "N segnali negli ultimi 5 minuti"
-      const res = await db
-        .from("items")
-        .select("id", { count: "exact", head: true })
-        .gte("published_at", since)
-        .lte("published_at", new Date(now).toISOString());
-      return { seconds, count: res.error ? null : (res.count ?? 0) };
-    }),
-  );
-
-  const [total, video, articles, thread, release, podcast, windows] = await Promise.all([
-    // head: true = conta soltanto, senza scaricare le righe
-    db.from("items").select("id", { count: "exact", head: true }),
+  const [video, articles, thread, release, podcast] = await Promise.all([
     latest("youtube", 8),
     latest("article", 12),
     latest("hn", 8),
     latest("github", 8),
     latest("podcast", 8),
-    windowCounts,
   ]);
 
-  if (total.error || total.count === null) {
+  if ([video, articles, thread, release, podcast].every((r) => r.error)) {
     return Response.json({ error: "Lettura non riuscita" }, { status: 502 });
   }
 
   // Gli ultimi contenuti veri in ordine cronologico, dal più recente: si mescolano tutti i
-  // formati e si prendono i primi, al massimo 2 per formato così il poster resta vario.
+  // formati e si prendono i primi, al massimo 2 per formato così le schede restano varie.
   const pool: { kind: SignalKind; row: Row }[] = [
     ...((video.data as Row[] | null) ?? []).map((row) => ({ kind: "video" as const, row })),
     ...((articles.data as Row[] | null) ?? []).map((row) => ({ kind: "article" as const, row })),
@@ -104,12 +85,9 @@ export async function GET() {
     if ((perKind[kind] ?? 0) >= 2) continue;
     perKind[kind] = (perKind[kind] ?? 0) + 1;
     items.push(toSignal(kind, row));
-    if (items.length === 6) break;
+    if (items.length === 10) break;
   }
 
-  // solo le finestre contate davvero (se una lettura è fallita, si salta: mai numeri inventati)
-  const counted = windows.flatMap((w) => (w.count === null ? [] : [{ seconds: w.seconds, count: w.count }]));
-
-  const body: SignalsResponse = { windows: counted, count: total.count, items };
+  const body: SignalsResponse = { items };
   return Response.json(body, { headers: { "Cache-Control": "no-store" } });
 }
