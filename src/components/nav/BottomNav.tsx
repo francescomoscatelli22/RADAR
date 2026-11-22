@@ -56,7 +56,7 @@ export default function BottomNav() {
                 {t.href === "/salvati" && saved.length > 0 && (
                   <span
                     aria-label={`${saved.length} salvati`}
-                    className="absolute right-[calc(50%-26px)] top-2 grid min-w-5 place-items-center rounded-full border-2 border-card-ink bg-accent px-1 font-mono text-[10px] font-bold leading-4 text-card-ink"
+                    className="absolute right-[calc(50%-26px)] top-2 grid min-w-5 place-items-center rounded-full border-2 border-card-ink bg-accent px-1 font-mono text-[11px] font-bold leading-4 text-card-ink"
                   >
                     {saved.length > 99 ? "99+" : saved.length}
                   </span>

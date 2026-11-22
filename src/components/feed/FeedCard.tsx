@@ -149,7 +149,7 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
       <div className="flex gap-3 p-4 pb-2">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 bg-card-ink px-2 py-1 font-mono text-[10px] font-bold uppercase leading-none tracking-[0.12em] text-cream">
+            <span className="inline-flex items-center gap-1 bg-card-ink px-2 py-1 font-mono text-[11px] font-bold uppercase leading-none tracking-[0.12em] text-cream">
               <Icon name={fmt.icon} size={12} strokeWidth={2.5} filled={isVideo} />
               {fmt.label}
             </span>
@@ -158,7 +158,7 @@ function FeedCardBase({ item, index = 0 }: { item: FeedItem; index?: number }) {
             )}
             {duration && <span className="font-mono text-[11px] font-bold">{duration}</span>}
             {shown.translated && (
-              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">· {TRANSLATED_LABEL[lang]}</span>
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] opacity-70">· {TRANSLATED_LABEL[lang]}</span>
             )}
           </div>
 

@@ -87,7 +87,7 @@ function PullToRefresh({ onRefresh, refreshing, disabled }: { onRefresh: () => v
 function DayDivider({ label }: { label: string }) {
   return (
     <li aria-hidden="true" className="flex items-center gap-3 pt-2 first:pt-0">
-      <span className="bg-cream px-2 py-1 font-mono text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-card-ink">
+      <span className="bg-cream px-2 py-1 font-mono text-[11px] font-bold uppercase leading-none tracking-[0.14em] text-card-ink">
         {label}
       </span>
       <span className="h-[3px] flex-1 bg-cream/15" />
